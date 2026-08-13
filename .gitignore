@@ -1,0 +1,9 @@
+node_modules/
+dist/
+out/
+*.log
+
+# вшитый ключ CurseForge — в репозиторий не попадает
+src/main/lib/embedded-key.js
+!build/icon.png
+!build/icon.ico

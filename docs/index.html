@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plus Launcher — лаунчер Minecraft со всеми версиями и модами</title>
+<meta name="description" content="Лаунчер Minecraft для Windows: все версии, Fabric, Quilt, Forge и NeoForge, моды с Modrinth и CurseForge в один клик, вход по лицензии Microsoft, скины и статус в Discord." />
+<link rel="icon" href="img/favicon.png" />
+<link rel="stylesheet" href="styles.css" />
+<!-- превью при отправке ссылки в мессенджеры -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Plus Launcher — лаунчер Minecraft" />
+<meta property="og:description" content="Все версии, Fabric/Quilt/Forge/NeoForge, моды с Modrinth и CurseForge, лицензия Microsoft, скины и статус в Discord." />
+<meta property="og:image" content="img/play.png" />
+<meta name="theme-color" content="#0d0e11" />
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true"><defs>
+  <symbol id="i-logo" viewBox="0 0 48 48">
+    <path d="M24 4 44 15 24 26 4 15Z" fill="#8fd45a"/>
+    <path d="M4 15 24 26v18L4 33Z" fill="#5da336"/>
+    <path d="M44 15 24 26v18l20-11Z" fill="#3f7526"/>
+    <path d="M24 4 44 15 24 26 4 15Z" fill="none" stroke="#0d0e11" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M4 15v18l20 11 20-11V15" fill="none" stroke="#0d0e11" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M24 26v18" fill="none" stroke="#0d0e11" stroke-width="1.5"/>
+  </symbol>
+  <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 1.5v9m0 0L4.5 7M8 10.5 11.5 7M2 13.5h12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.5 14.5 5 8 8.5 1.5 5Zm-6.5 3.5v6L8 14.5 14.5 11V5M8 8.5v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-package" viewBox="0 0 16 16"><path d="M2 4.5 8 1.5l6 3v7l-6 3-6-3Zm0 0 6 3 6-3M8 7.5v7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.5 3.5h4.5l1.5 2h7v8h-13Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.8" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 14c.6-3 2.8-4.5 5.5-4.5S13 11 13.5 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+  <symbol id="i-skin" viewBox="0 0 16 16"><path d="M5 2h6l3 2.5-1.5 2.5L11 6v8H5V6L3.5 7 2 4.5Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-discord" viewBox="0 0 16 16"><path d="M6 3.2C4.6 3.4 3.4 3.9 2.6 4.5 1.6 6.4 1.1 8.6 1.3 11c1 .8 2 1.3 3 1.6l.7-1.1M10 3.2c1.4.2 2.6.7 3.4 1.3 1 1.9 1.5 4.1 1.3 6.5-1 .8-2 1.3-3 1.6l-.7-1.1" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="8.5" r="1.2" fill="currentColor"/><circle cx="10" cy="8.5" r="1.2" fill="currentColor"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4M13 1.5V5h-3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13 3 7.5 8.5M11.5 9.5v4h-9v-9h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
+<header class="top">
+  <a class="brand" href="#">
+    <svg class="brand-mark"><use href="#i-logo"/></svg>
+    <span class="brand-text"><b>PLUS</b><i>LAUNCHER</i></span>
+  </a>
+  <nav>
+    <a href="#features">Возможности</a>
+    <a href="#shots">Скриншоты</a>
+    <a href="#install">Установка</a>
+    <a href="#faq">Вопросы</a>
+    <a class="ghost" id="nav-repo" href="#" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-text">
+      <p class="eyebrow mono">Лаунчер Minecraft для Windows</p>
+      <h1>Все версии, моды и лицензия — <span class="accent">в одном окне</span></h1>
+      <p class="lead">
+        От alpha 2010 года до свежих снапшотов. Fabric, Quilt, Forge и NeoForge ставятся в один клик,
+        моды ищутся сразу на Modrinth и CurseForge, у каждой версии своя папка со своими модами и мирами.
+      </p>
+
+      <div class="cta">
+        <a class="btn primary" id="download" href="#" rel="noopener">
+          <svg><use href="#i-download"/></svg>
+          <span>Скачать для Windows</span>
+        </a>
+        <div class="cta-meta mono" id="release-meta">проверяю последнюю версию…</div>
+      </div>
+
+      <ul class="facts mono">
+        <li>Windows 10 / 11, 64-бит</li>
+        <li>Java ставится сама</li>
+        <li>Без рекламы и регистрации</li>
+      </ul>
+    </div>
+
+    <div class="hero-shot">
+      <img src="img/play.png" alt="Окно лаунчера со списком сборок" />
+    </div>
+  </section>
+
+  <section id="features" class="section">
+    <h2>Что умеет</h2>
+    <div class="grid">
+      <article class="card">
+        <svg class="card-ico"><use href="#i-cube"/></svg>
+        <h3>Все версии Mojang</h3>
+        <p>Релизы, снапшоты, старые alpha и beta — полный список прямо из манифеста Mojang, больше девятисот версий.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-package"/></svg>
+        <h3>Моды в один клик</h3>
+        <p>Поиск сразу по Modrinth и CurseForge: моды, ресурспаки, шейдеры, датапаки. Зависимости подтягиваются сами.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-cube"/></svg>
+        <h3>Fabric, Quilt, Forge, NeoForge</h3>
+        <p>Загрузчик ставится вместе с версией — Forge и NeoForge через их же официальный установщик.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-folder"/></svg>
+        <h3>Папка на каждую версию</h3>
+        <p>У 1.21.4 своя папка, у 1.20.1 своя: моды, миры и конфиги не смешиваются. Папку можно держать на любом диске.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-user"/></svg>
+        <h3>Лицензия Microsoft</h3>
+        <p>Вход по коду устройства с проверкой покупки игры. Есть и оффлайн-профиль для одиночной игры.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-skin"/></svg>
+        <h3>Скины</h3>
+        <p>Загрузка скина прямо на аккаунт Mojang, выбор Classic или Slim, плащи. Для оффлайна — локальные скины.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-discord"/></svg>
+        <h3>Статус в Discord</h3>
+        <p>Друзья видят версию, сборку и сколько времени вы уже играете. Выключается одной галочкой.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-refresh"/></svg>
+        <h3>Обновляется сам</h3>
+        <p>Лаунчер проверяет новые версии и предлагает поставить обновление, не заходя на сайт.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="shots" class="section">
+    <h2>Как выглядит</h2>
+    <div class="shots">
+      <figure><img src="img/mods.png" alt="Каталог модов: Modrinth и CurseForge в одном списке" loading="lazy" /><figcaption>Каталог модов — оба источника в одном списке</figcaption></figure>
+      <figure><img src="img/versions.png" alt="Создание сборки: выбор версии и загрузчика" loading="lazy" /><figcaption>Новая сборка: версия, загрузчик, своя папка</figcaption></figure>
+      <figure><img src="img/skins.png" alt="Раздел скинов с предпросмотром" loading="lazy" /><figcaption>Скины с предпросмотром прямо из PNG</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="install" class="section">
+    <h2>Установка</h2>
+    <ol class="steps">
+      <li><span class="num mono">1</span><div><h3>Скачайте установщик</h3><p>Кнопка выше — файл <code class="mono">PlusLauncher-Setup.exe</code>, около 78 МБ.</p></div></li>
+      <li><span class="num mono">2</span><div><h3>Запустите его</h3><p>Windows покажет синее окно SmartScreen: «Подробнее» → «Выполнить в любом случае». Так бывает у программ без платной подписи разработчика.</p></div></li>
+      <li><span class="num mono">3</span><div><h3>Выберите папку для игры</h3><p>При первом запуске лаунчер спросит, где хранить файлы. Можно оставить по умолчанию или указать другой диск.</p></div></li>
+    </ol>
+  </section>
+
+  <section id="faq" class="section">
+    <h2>Вопросы</h2>
+    <div class="faq">
+      <details><summary>Нужна ли лицензия Minecraft?</summary><p>Для входа по Microsoft — да, лаунчер проверяет покупку. Без лицензии можно создать оффлайн-профиль: одиночная игра и сервера, которые не требуют лицензию.</p></details>
+      <details><summary>Нужно ли ставить Java?</summary><p>Нет. Лаунчер сам найдёт подходящую Java, а если её нет — скачает нужную версию с Adoptium.</p></details>
+      <details><summary>Куда сохраняются моды и миры?</summary><p>В папку версии: например <code class="mono">1.21.4\mods</code> и <code class="mono">1.21.4\saves</code>. Папку лаунчера можно перенести на другой диск прямо из настроек, вместе со всем скачанным.</p></details>
+      <details><summary>Почему антивирус или SmartScreen ругается?</summary><p>Установщик не подписан сертификатом — подпись платная. Windows предупреждает о любой неподписанной программе. Файлы всегда берите с этой страницы или из релизов на GitHub.</p></details>
+      <details><summary>Как обновиться?</summary><p>Лаунчер сам сообщит о новой версии и предложит поставить её. Можно и просто скачать свежий установщик отсюда — настройки и скачанные версии останутся на месте.</p></details>
+      <details><summary>Можно ли играть на серверах?</summary><p>Да, как в обычном Minecraft. Лицензионные сервера требуют вход по Microsoft.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-brand">
+    <svg class="brand-mark"><use href="#i-logo"/></svg>
+    <span class="mono">Plus Launcher</span>
+  </div>
+  <div class="foot-links">
+    <a id="foot-repo" href="#" target="_blank" rel="noopener"><svg><use href="#i-link"/></svg> Исходники и релизы</a>
+  </div>
+  <p class="foot-note">Не связано с Mojang и Microsoft. Minecraft — товарный знак Mojang Studios.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

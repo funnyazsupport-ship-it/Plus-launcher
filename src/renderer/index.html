@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Plus Launcher</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- Набор иконок: везде используются через <svg><use href="#i-..."> -->
+<svg class="sprite" aria-hidden="true">
+  <defs>
+    <!-- логотип: изометрический блок -->
+    <symbol id="i-logo" viewBox="0 0 48 48">
+      <path d="M24 4 44 15 24 26 4 15Z" fill="#8fd45a"/>
+      <path d="M4 15 24 26v18L4 33Z" fill="#5da336"/>
+      <path d="M44 15 24 26v18l20-11Z" fill="#3f7526"/>
+      <path d="M24 4 44 15 24 26 4 15Z" fill="none" stroke="#0d0e11" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M4 15v18l20 11 20-11V15" fill="none" stroke="#0d0e11" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M24 26v18" fill="none" stroke="#0d0e11" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M4 2.5 13 8l-9 5.5Z" fill="currentColor"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.5 14.5 5 8 8.5 1.5 5Zm-6.5 3.5v6L8 14.5 14.5 11V5M8 8.5v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-package" viewBox="0 0 16 16"><path d="M2 4.5 8 1.5l6 3v7l-6 3-6-3Zm0 0 6 3 6-3M8 7.5v7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.8" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 14c.6-3 2.8-4.5 5.5-4.5S13 11 13.5 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+    <symbol id="i-skin" viewBox="0 0 16 16"><path d="M5 2h6l3 2.5-1.5 2.5L11 6v8H5V6L3.5 7 2 4.5Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 16 16"><path d="M2 4.5h12M2 11.5h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="6" cy="4.5" r="2" fill="#0d0e11" stroke="currentColor" stroke-width="1.3"/><circle cx="10.5" cy="11.5" r="2" fill="#0d0e11" stroke="currentColor" stroke-width="1.3"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4 6l2.5 2L4 10m4.5 0h3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.5 3.5h4.5l1.5 2h7v8h-13Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4m-6.5 0 .8 9.5h7.4L12.5 4M6.5 6.5v5M9.5 6.5v5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 1.5v9m0 0L4.5 7M8 10.5 11.5 7M2 13.5h12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m10.5 10.5 3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="1.8" fill="currentColor"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5c1 0 1.9.3 2.7.7M14.5 8s-2.5 4.5-6.5 4.5c-1 0-1.9-.3-2.6-.7M2 14 14 2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4M13 1.5V5h-3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-link" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13 3 7.5 8.5M11.5 9.5v4h-9v-9h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-min" viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.2"/></symbol>
+    <symbol id="i-max" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+    <symbol id="i-x" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2"/></symbol>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark"><use href="#i-logo"/></svg>
+    <div class="brand-text"><b>PLUS</b><span>LAUNCHER</span></div>
+  </div>
+  <div class="drag"></div>
+  <div class="winctl">
+    <button id="btn-min" title="Свернуть"><svg><use href="#i-min"/></svg></button>
+    <button id="btn-max" title="Развернуть"><svg><use href="#i-max"/></svg></button>
+    <button id="btn-close" class="x" title="Закрыть"><svg><use href="#i-x"/></svg></button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail">
+    <button class="rail-item active" data-page="play"><svg><use href="#i-play"/></svg><span>Играть</span></button>
+    <button class="rail-item" data-page="versions"><svg><use href="#i-cube"/></svg><span>Версии</span></button>
+    <button class="rail-item" data-page="mods"><svg><use href="#i-package"/></svg><span>Моды</span></button>
+    <button class="rail-item" data-page="skins"><svg><use href="#i-skin"/></svg><span>Скины</span></button>
+    <button class="rail-item" data-page="account"><svg><use href="#i-user"/></svg><span>Аккаунт</span></button>
+    <button class="rail-item" data-page="settings"><svg><use href="#i-sliders"/></svg><span>Настройки</span></button>
+    <button class="rail-item" data-page="console"><svg><use href="#i-terminal"/></svg><span>Консоль</span></button>
+
+    <div class="rail-foot">
+      <div class="who" id="who">
+        <img id="acc-avatar" alt="" />
+        <div class="who-t">
+          <div class="who-name" id="acc-name">нет профиля</div>
+          <div class="who-kind mono" id="acc-type">не выполнен вход</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="content">
+    <!-- ИГРАТЬ -->
+    <section class="page active" id="page-play">
+      <div class="head">
+        <div><h1>Сборки</h1><p class="dim">Каждая версия живёт в своей папке со своими модами</p></div>
+        <button class="btn accent" id="go-create"><svg><use href="#i-plus"/></svg>Новая сборка</button>
+      </div>
+      <div class="grid-cards" id="instances"></div>
+      <div class="blank" id="instances-empty" hidden>
+        <svg class="blank-mark"><use href="#i-cube"/></svg>
+        <h3>Сборок пока нет</h3>
+        <p class="dim">Соберите любую версию — от alpha 2010 года до свежих снапшотов.</p>
+        <button class="btn accent" id="go-create-2">Создать первую</button>
+      </div>
+    </section>
+
+    <!-- ВЕРСИИ -->
+    <section class="page" id="page-versions">
+      <div class="head"><div><h1>Новая сборка</h1><p class="dim">Все версии Mojang, Fabric, Quilt, Forge и NeoForge</p></div></div>
+
+      <div class="panel">
+        <div class="form-row">
+          <label class="f grow"><span class="lbl">Название</span><input id="ni-name" placeholder="Выживание с модами" /></label>
+          <div class="f"><span class="lbl">Цвет</span><div class="swatches" id="ni-colors"></div></div>
+        </div>
+        <div class="form-row">
+          <label class="f"><span class="lbl">Тип версий</span>
+            <select id="ni-type">
+              <option value="release">Релизы</option>
+              <option value="snapshot">Снапшоты</option>
+              <option value="old_beta">Beta</option>
+              <option value="old_alpha">Alpha</option>
+              <option value="all">Все</option>
+            </select>
+          </label>
+          <label class="f grow"><span class="lbl">Версия Minecraft</span><select id="ni-mc" class="mono"></select></label>
+        </div>
+        <div class="form-row">
+          <label class="f"><span class="lbl">Загрузчик</span>
+            <select id="ni-loader">
+              <option value="vanilla">Без модов</option>
+              <option value="fabric">Fabric</option>
+              <option value="quilt">Quilt</option>
+              <option value="forge">Forge</option>
+              <option value="neoforge">NeoForge</option>
+            </select>
+          </label>
+          <label class="f grow" id="ni-loader-ver-wrap" hidden><span class="lbl">Версия загрузчика</span><select id="ni-loader-ver" class="mono"></select></label>
+        </div>
+        <div class="form-row right">
+          <span class="dim mono" id="ni-folder-hint"></span>
+          <button class="btn accent lg" id="ni-create"><svg><use href="#i-download"/></svg>Установить</button>
+        </div>
+      </div>
+
+      <h2 class="sec">Установлено</h2>
+      <div class="chips" id="installed-versions"></div>
+    </section>
+
+    <!-- МОДЫ -->
+    <section class="page" id="page-mods">
+      <div class="head">
+        <div><h1>Каталог</h1><p class="dim">Modrinth и CurseForge в одном списке</p></div>
+        <button class="btn" id="mods-open-folder"><svg><use href="#i-folder"/></svg>Папка</button>
+      </div>
+
+      <div class="bar">
+        <div class="search-wrap">
+          <svg class="search-ico"><use href="#i-search"/></svg>
+          <input id="m-query" placeholder="Sodium, JEI, Create..." />
+        </div>
+        <select id="m-instance" title="Сборка"></select>
+        <select id="m-kind">
+          <option value="mod">Моды</option>
+          <option value="resourcepack">Ресурспаки</option>
+          <option value="shader">Шейдеры</option>
+          <option value="modpack">Модпаки</option>
+          <option value="datapack">Датапаки</option>
+        </select>
+        <select id="m-source">
+          <option value="both">Оба источника</option>
+          <option value="modrinth">Modrinth</option>
+          <option value="curseforge">CurseForge</option>
+        </select>
+        <select id="m-sort">
+          <option value="relevance">Релевантность</option>
+          <option value="downloads">Загрузки</option>
+          <option value="updated">Обновление</option>
+          <option value="newest">Новинки</option>
+        </select>
+      </div>
+
+      <div class="split">
+        <div class="rows" id="mods-list"></div>
+        <aside class="side">
+          <div class="side-head">
+            <span class="lbl">Установлено</span>
+            <span class="count mono" id="inst-count">0</span>
+          </div>
+          <div class="mono dim path" id="mods-path">—</div>
+          <div id="installed-mods" class="side-list"></div>
+        </aside>
+      </div>
+      <button class="btn full" id="mods-more" hidden>Показать ещё</button>
+    </section>
+
+    <!-- СКИНЫ -->
+    <section class="page" id="page-skins">
+      <div class="head">
+        <div><h1>Скины</h1><p class="dim">Загрузка на лицензию Microsoft и локальные скины для оффлайна</p></div>
+        <button class="btn accent" id="skin-add"><svg><use href="#i-plus"/></svg>Добавить PNG</button>
+      </div>
+
+      <div class="skin-layout">
+        <div class="panel preview-panel">
+          <div class="preview-stage">
+            <canvas id="skin-canvas" width="128" height="256"></canvas>
+          </div>
+          <div class="preview-meta mono dim" id="skin-meta">скин не выбран</div>
+
+          <div class="seg" id="skin-variant">
+            <button data-variant="classic" class="on">Classic (4px)</button>
+            <button data-variant="slim">Slim (3px)</button>
+          </div>
+
+          <div class="stack">
+            <button class="btn accent" id="skin-apply"><svg><use href="#i-download"/></svg>Применить скин</button>
+            <button class="btn" id="skin-reset">Сбросить на стандартный</button>
+            <button class="btn danger" id="skin-delete"><svg><use href="#i-trash"/></svg>Удалить из библиотеки</button>
+          </div>
+
+          <p class="note" id="skin-note"></p>
+        </div>
+
+        <div class="panel">
+          <div class="side-head"><span class="lbl">Библиотека</span><span class="count mono" id="skin-count">0</span></div>
+          <div class="skin-grid" id="skin-library"></div>
+
+          <div class="divider"></div>
+          <div class="side-head"><span class="lbl">Оффлайн-профиль</span></div>
+          <p class="dim">Сервера скинов не знают оффлайн-ник, поэтому скин показывает мод CustomSkinLoader — он берёт PNG из папки версии. Выберите сборку и примените скин.</p>
+          <div class="form-row">
+            <label class="f grow"><span class="lbl">Сборка</span><select id="skin-instance"></select></label>
+          </div>
+          <div class="stack">
+            <button class="btn" id="skin-local"><svg><use href="#i-folder"/></svg>Поставить локально</button>
+            <button class="btn" id="skin-mod"><svg><use href="#i-download"/></svg>Установить CustomSkinLoader</button>
+          </div>
+
+          <div class="divider"></div>
+          <div class="side-head"><span class="lbl">Плащи</span></div>
+          <div class="capes" id="capes"><span class="dim">доступны только для лицензии</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- АККАУНТ -->
+    <section class="page" id="page-account">
+      <div class="head"><div><h1>Аккаунт</h1><p class="dim">Лицензия Microsoft или оффлайн-профиль</p></div></div>
+
+      <div class="two">
+        <div class="panel">
+          <div class="side-head"><span class="lbl">Лицензия Microsoft</span></div>
+          <p class="dim">Вход по коду устройства. Нужна купленная Minecraft: Java Edition.</p>
+          <div id="ms-code-box" class="codebox" hidden>
+            <div class="code mono" id="ms-code">------</div>
+            <p class="dim">Откройте <b class="mono" id="ms-url">microsoft.com/link</b> и введите код</p>
+            <div class="stack row">
+              <button class="btn" id="ms-copy">Скопировать</button>
+              <button class="btn" id="ms-open"><svg><use href="#i-link"/></svg>Открыть</button>
+              <button class="btn" id="ms-cancel">Отмена</button>
+            </div>
+          </div>
+          <button class="btn accent" id="ms-login">Войти через Microsoft</button>
+        </div>
+
+        <div class="panel">
+          <div class="side-head"><span class="lbl">Оффлайн-профиль</span></div>
+          <p class="dim">Одиночная игра и сервера без лицензии.</p>
+          <label class="f"><span class="lbl">Ник</span><input id="off-name" placeholder="Steve" maxlength="16" /></label>
+          <button class="btn" id="off-add">Добавить</button>
+        </div>
+      </div>
+
+      <h2 class="sec">Профили</h2>
+      <div class="grid-cards" id="accounts"></div>
+    </section>
+
+    <!-- НАСТРОЙКИ -->
+    <section class="page" id="page-settings">
+      <div class="head"><div><h1>Настройки</h1><p class="dim">Память, Java и поведение лаунчера</p></div></div>
+
+      <div class="panel">
+        <div class="side-head"><span class="lbl">Оперативная память</span><span class="count mono" id="ram-label">4096 МБ</span></div>
+        <input type="range" id="s-maxram" min="1024" max="32768" step="512" />
+        <label class="f"><span class="lbl">Минимум (Xms), МБ</span><input type="number" id="s-minram" min="256" step="256" class="mono" /></label>
+      </div>
+
+      <div class="panel">
+        <div class="side-head"><span class="lbl">Java</span><button class="btn sm" id="java-refresh"><svg><use href="#i-refresh"/></svg>Найти</button></div>
+        <div class="form-row">
+          <label class="f grow"><span class="lbl">Путь к java.exe</span><input id="s-java" class="mono" placeholder="пусто — подобрать автоматически" /></label>
+          <button class="btn" id="s-java-browse">Обзор</button>
+        </div>
+        <div class="chips" id="java-list"></div>
+        <div class="stack row">
+          <button class="btn sm" data-jinstall="8">Скачать Java 8</button>
+          <button class="btn sm" data-jinstall="17">Скачать Java 17</button>
+          <button class="btn sm" data-jinstall="21">Скачать Java 21</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="side-head"><span class="lbl">Игра</span></div>
+        <div class="form-row">
+          <label class="f"><span class="lbl">Ширина</span><input type="number" id="s-width" class="mono" /></label>
+          <label class="f"><span class="lbl">Высота</span><input type="number" id="s-height" class="mono" /></label>
+        </div>
+        <label class="check"><input type="checkbox" id="s-fullscreen" /><span>Полноэкранный режим</span></label>
+        <label class="check"><input type="checkbox" id="s-close" /><span>Сворачивать лаунчер при запуске игры</span></label>
+        <label class="f"><span class="lbl">JVM-аргументы</span><input id="s-jvm" class="mono" /></label>
+      </div>
+
+      <div class="panel">
+        <div class="side-head">
+          <span class="lbl">Статус в Discord</span>
+          <span class="count mono" id="discord-state">выключено</span>
+        </div>
+        <p class="dim">Друзья будут видеть, что вы играете в Minecraft через Plus Launcher — версию, сборку и сколько времени уже играете.</p>
+        <label class="check"><input type="checkbox" id="s-discord" /><span>Показывать статус в Discord</span></label>
+        <label class="check"><input type="checkbox" id="s-discord-name" /><span>Показывать название сборки</span></label>
+        <p class="note" id="discord-note" hidden></p>
+      </div>
+
+      <div class="panel">
+        <div class="side-head">
+          <span class="lbl">Обновления лаунчера</span>
+          <span class="count mono" id="app-version">—</span>
+        </div>
+        <p class="dim">Лаунчер смотрит последний релиз на GitHub и сообщает, когда выходит новая версия.</p>
+        <div class="form-row">
+          <button class="btn" id="s-check-update"><svg><use href="#i-refresh"/></svg>Проверить сейчас</button>
+        </div>
+        <label class="check"><input type="checkbox" id="s-autocheck" /><span>Проверять обновления при запуске</span></label>
+        <p class="note" id="update-note" hidden></p>
+      </div>
+
+      <div class="panel">
+        <div class="side-head"><span class="lbl">Папка лаунчера</span><span class="count mono" id="st-size">—</span></div>
+        <p class="dim">Здесь лежат версии, библиотеки, ресурсы, Java и папки версий с модами и мирами. Их можно держать на другом диске.</p>
+        <div class="form-row">
+          <input id="s-root" readonly class="grow mono" />
+          <button class="btn" id="s-open-root"><svg><use href="#i-folder"/></svg>Открыть</button>
+          <button class="btn accent" id="s-change-root">Изменить</button>
+        </div>
+        <p class="dim mono" id="st-free"></p>
+      </div>
+    </section>
+
+    <!-- КОНСОЛЬ -->
+    <section class="page" id="page-console">
+      <div class="head">
+        <div><h1>Консоль</h1><p class="dim">Вывод Minecraft и лаунчера</p></div>
+        <div class="stack row">
+          <button class="btn" id="log-clear">Очистить</button>
+          <button class="btn danger" id="log-kill">Завершить игру</button>
+        </div>
+      </div>
+      <pre class="console mono" id="console"></pre>
+    </section>
+  </main>
+</div>
+
+<footer class="dock">
+  <div class="dock-inst">
+    <div class="dock-mark" id="pb-icon"><svg><use href="#i-cube"/></svg></div>
+    <div>
+      <div class="dock-name" id="pb-name">сборка не выбрана</div>
+      <div class="dock-sub mono dim" id="pb-sub">—</div>
+    </div>
+  </div>
+  <div class="dock-prog">
+    <div class="track"><div class="fill" id="pb-bar"></div></div>
+    <div class="dock-stage mono dim" id="pb-stage"></div>
+  </div>
+  <button class="play-btn" id="btn-play" disabled>ИГРАТЬ</button>
+</footer>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- универсальный вопрос с кнопками -->
+<div class="modal" id="ask" hidden>
+  <div class="modal-box ask-box">
+    <div class="modal-top"><h3 id="ask-title"></h3></div>
+    <div class="modal-body">
+      <p id="ask-text" class="ask-text"></p>
+      <div class="ask-actions" id="ask-actions"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-box">
+    <div class="modal-top">
+      <h3 id="modal-title">Версии</h3>
+      <button class="ico-btn" id="modal-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

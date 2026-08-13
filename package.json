@@ -1,0 +1,59 @@
+{
+  "name": "plus-launcher",
+  "version": "1.0.0",
+  "description": "Plus Launcher - Minecraft launcher with Microsoft login, all versions, Fabric/Quilt/Forge/NeoForge and built-in Modrinth + CurseForge mod browser",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win",
+    "release": "electron-builder --win -p never",
+    "publish": "electron-builder --win -p always"
+  },
+  "author": "Plus",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "electron-updater": "^6.8.9"
+  },
+  "build": {
+    "appId": "com.plus.launcher",
+    "productName": "Plus Launcher",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "funnyazsupport-ship-it",
+        "repo": "Plus-launcher"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "PlusLauncher-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Plus Launcher",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  }
+}
