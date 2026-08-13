@@ -41,7 +41,7 @@ contextBridge.exposeInMainWorld('api', {
     install: (opts) => invoke('install:version', opts),
   },
   java: {
-    list: () => invoke('java:list'),
+    list: (force) => invoke('java:list', force),
     install: (opts) => invoke('java:install', opts),
     browse: () => invoke('java:browse'),
   },

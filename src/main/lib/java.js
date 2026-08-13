@@ -60,8 +60,19 @@ function walkForJava(dir, depth = 0, found = []) {
   return found;
 }
 
-/** Все найденные в системе JRE/JDK */
-async function findAll() {
+// Обход Program Files и прочих папок занимает секунды, а список меняется редко
+let cache = { at: 0, list: null };
+const CACHE_MS = 5 * 60 * 1000;
+
+/** Все найденные в системе JRE/JDK. force=true — искать заново, минуя кэш */
+async function findAll(force = false) {
+  if (!force && cache.list && Date.now() - cache.at < CACHE_MS) return cache.list;
+  const list = await scanAll();
+  cache = { at: Date.now(), list };
+  return list;
+}
+
+async function scanAll() {
   const paths = new Set();
   if (process.env.JAVA_HOME) paths.add(path.join(process.env.JAVA_HOME, 'bin', EXE));
   const { out } = await run(process.platform === 'win32' ? 'where' : 'which', ['java']);
@@ -132,6 +143,7 @@ async function install(major, onProgress = () => {}) {
   if (!found.length) throw new Error('java не найдена в распакованном архиве');
   try { await fsp.unlink(archive); } catch {}
   if (process.platform !== 'win32') await fsp.chmod(found[0], 0o755);
+  cache = { at: 0, list: null };            // появилась новая java — кэш устарел
   onProgress({ stage: `Java ${major} установлена`, percent: 100 });
   return found[0];
 }

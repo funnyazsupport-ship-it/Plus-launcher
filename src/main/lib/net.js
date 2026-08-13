@@ -78,10 +78,13 @@ async function exists(p) {
  * Скачивает файл. Пропускает, если файл уже есть и sha1/размер совпадают.
  * @returns {Promise<number>} количество скачанных байт (0 = уже был)
  */
-async function download(url, dest, { sha1 = null, size = null, tries = 4, headers = {} } = {}) {
+async function download(url, dest, { sha1 = null, size = null, tries = 4, headers = {}, trustSize = false } = {}) {
   if (await exists(dest)) {
     try {
       const st = await fsp.stat(dest);
+      // trustSize — для ресурсов игры: их тысячи, и считать sha1 каждого при каждой проверке
+      // слишком долго. Свежескачанное всё равно сверяется по sha1 ниже.
+      if (trustSize && size && st.size === size) return 0;
       if (sha1) {
         if ((await sha1File(dest)) === sha1) return 0;
       } else if (size ? st.size === size : st.size > 0) {

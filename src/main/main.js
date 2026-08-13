@@ -108,9 +108,20 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 
+/**
+ * Кладём путь к данным в реестр: деинсталлятор по нему находит папку с версиями,
+ * чтобы предложить удалить их вместе с лаунчером.
+ */
+function rememberDataDir() {
+  if (process.platform !== 'win32') return;
+  execFile('reg', ['add', 'HKCU\\Software\\Plus Launcher', '/v', 'DataDir', '/t', 'REG_SZ', '/d', dirs.root, '/f'],
+    (e) => { if (e) console.warn('[reg]', e.message); });
+}
+
 app.whenReady().then(() => {
   createWindow();
   applyDiscord();
+  rememberDataDir();
 });
 app.on('before-quit', () => discord.disable());
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
@@ -244,6 +255,9 @@ handle('storage:apply', async ({ taskId, newRoot, move }) => {
   const { target } = await storage.validateTarget(newRoot);
   if (move) await storage.moveData(dirs.root, target, progress(taskId));
   storage.writePointer(target);
+  if (process.platform === 'win32') {
+    execFile('reg', ['add', 'HKCU\\Software\\Plus Launcher', '/v', 'DataDir', '/t', 'REG_SZ', '/d', target, '/f'], () => {});
+  }
   send('progress', { taskId, stage: 'Перезапуск лаунчера', percent: 100 });
   setTimeout(() => { app.relaunch(); app.exit(0); }, 700);
   return { root: target, moved: Boolean(move), restarted: true };
@@ -263,7 +277,7 @@ handle('install:version', async ({ taskId, mc, loader, loaderVersion }) => {
 });
 
 // ---------- java ----------
-handle('java:list', () => javaLib.findAll());
+handle('java:list', (force) => javaLib.findAll(Boolean(force)));
 handle('java:install', ({ taskId, major }) => javaLib.install(major, progress(taskId)));
 handle('java:browse', async () => {
   const r = await dialog.showOpenDialog(win, {

@@ -1,6 +1,6 @@
 {
   "name": "plus-launcher",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Plus Launcher - Minecraft launcher with Microsoft login, all versions, Fabric/Quilt/Forge/NeoForge and built-in Modrinth + CurseForge mod browser",
   "main": "src/main/main.js",
   "scripts": {
@@ -53,7 +53,11 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Plus Launcher",
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Plus Launcher",
+      "include": "build/installer.nsh",
+      "deleteAppDataOnUninstall": true
     }
   }
 }
+

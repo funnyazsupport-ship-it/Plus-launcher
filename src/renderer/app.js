@@ -773,7 +773,7 @@ function bindSettings() {
     await save({ javaPath: j.path });
     toast(`Java ${j.major} выбрана`);
   });
-  $('#java-refresh').addEventListener('click', loadJavaList);
+  $('#java-refresh').addEventListener('click', () => loadJavaList(true));
 
   $$('[data-jinstall]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true;
@@ -982,10 +982,10 @@ async function askStorageOnFirstRun(info) {
   else await call(app.storage.apply({ taskId: newTask(), newRoot: info.root, move: false }), true).catch(() => {});
 }
 
-async function loadJavaList() {
+async function loadJavaList(force = false) {
   const box = $('#java-list');
   box.innerHTML = '<span class="dim"><span class="spin"></span> поиск java…</span>';
-  const list = await call(app.java.list(), true).catch(() => []);
+  const list = await call(app.java.list(force), true).catch(() => []);
   box.innerHTML = '';
   if (!list.length) { box.innerHTML = '<span class="dim">java не найдена — скачайте кнопкой ниже</span>'; return; }
   for (const j of list) {

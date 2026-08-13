@@ -212,13 +212,85 @@ async function extractNatives(files, targetDir) {
   }
 }
 
+/** Отметка о том, что версия установлена полностью — чтобы не проверять всё заново при каждом запуске */
+const stampFile = (id) => path.join(versionDir(id), '.installed');
+
+async function readStamp(id) {
+  try { return JSON.parse(await fsp.readFile(stampFile(id), 'utf8')); } catch { return null; }
+}
+
+async function writeStamp(id, data) {
+  try { await fsp.writeFile(stampFile(id), JSON.stringify(data)); } catch { /* не критично */ }
+}
+
+/**
+ * Быстрая проверка вместо полной: файлы на месте и нужного размера.
+ * Полная проверка с подсчётом sha1 тысяч файлов занимает десятки секунд на каждом запуске.
+ */
+async function quickVerify(v, arts) {
+  const jar = versionJarPath(v.jar || v.id);
+  if (v.downloads?.client) {
+    try {
+      const st = await fsp.stat(jar);
+      if (st.size !== v.downloads.client.size) return false;
+    } catch { return false; }
+  }
+  for (const a of arts) {
+    if (!a.sha1) continue;                       // необязательные библиотеки загрузчиков
+    try {
+      const st = await fsp.stat(a.path);
+      if (a.size && st.size !== a.size) return false;
+    } catch { return false; }
+  }
+
+  // ресурсы: полная проверка тысяч файлов долгая, поэтому смотрим индекс и выборку объектов —
+  // этого хватает, чтобы поймать удалённую или неполную папку assets
+  if (v.assetIndex) {
+    const idxPath = path.join(dirs.assetIndexes, `${v.assetIndex.id}.json`);
+    let index;
+    try { index = JSON.parse(await fsp.readFile(idxPath, 'utf8')); } catch { return false; }
+    const objects = Object.values(index.objects || {});
+    if (!objects.length) return false;
+    const step = Math.max(1, Math.floor(objects.length / 60));
+    for (let i = 0; i < objects.length; i += step) {
+      const o = objects[i];
+      const p = path.join(dirs.assetObjects, o.hash.slice(0, 2), o.hash);
+      try {
+        const st = await fsp.stat(p);
+        if (o.size && st.size !== o.size) return false;
+      } catch { return false; }
+    }
+  }
+  return true;
+}
+
 /**
  * Полная установка версии: json -> client.jar -> библиотеки -> нативы -> ассеты.
  * onProgress({stage, percent, detail})
+ * @param {object} opt { force } — force игнорирует отметку об установке
  */
-async function install(id, onProgress = () => {}) {
+async function install(id, onProgress = () => {}, opt = {}) {
   onProgress({ stage: 'Получение метаданных версии', percent: 1 });
   const v = await resolve(id);
+
+  // Уже ставили эту версию? Тогда только быстрая сверка — запуск игры перестаёт ждать минуту.
+  if (!opt.force) {
+    const stamp = await readStamp(id);
+    if (stamp?.assetIndex === (v.assetIndex?.id || null) && stamp?.jar === (v.jar || v.id)) {
+      const arts = [];
+      for (const lib of v.libraries || []) arts.push(...libArtifacts(lib));
+      onProgress({ stage: 'Проверка файлов', percent: 20 });
+      if (await quickVerify(v, arts)) {
+        const nativeDir = path.join(dirs.natives, id);
+        if (!fs.existsSync(nativeDir) || !fs.readdirSync(nativeDir).length) {
+          onProgress({ stage: 'Распаковка нативных библиотек', percent: 60 });
+          await extractNatives(arts.filter((a) => a.kind === 'native' && fs.existsSync(a.path)), nativeDir);
+        }
+        onProgress({ stage: 'Файлы на месте', percent: 100 });
+        return v;
+      }
+    }
+  }
 
   // 1. client.jar
   const jarId = v.jar || v.inheritsFrom || v.id;
@@ -281,7 +353,7 @@ async function install(id, onProgress = () => {}) {
     await pool(objects, 24, async ([name, obj]) => {
       const sub = obj.hash.slice(0, 2);
       const dest = path.join(dirs.assetObjects, sub, obj.hash);
-      await download(`${RESOURCES}/${sub}/${obj.hash}`, dest, { sha1: obj.hash, size: obj.size });
+      await download(`${RESOURCES}/${sub}/${obj.hash}`, dest, { sha1: obj.hash, size: obj.size, trustSize: true });
       // старые версии (pre-1.6 / virtual) читают ассеты как обычные файлы
       if (index.virtual || index.map_to_resources) {
         const vdir = index.map_to_resources
@@ -305,6 +377,13 @@ async function install(id, onProgress = () => {}) {
     const f = v.logging.client.file;
     await download(f.url, path.join(dirs.assets, 'log_configs', f.id), { sha1: f.sha1, size: f.size }).catch(() => {});
   }
+
+  await writeStamp(id, {
+    at: Date.now(),
+    jar: v.jar || v.id,
+    assetIndex: v.assetIndex?.id || null,
+    libraries: arts.length,
+  });
 
   onProgress({ stage: 'Готово', percent: 100 });
   return v;
