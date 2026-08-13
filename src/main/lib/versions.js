@@ -9,6 +9,8 @@ const { getJSON, download, pool, exists } = require('./net');
 const MANIFEST = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
 const RESOURCES = 'https://resources.download.minecraft.net';
 
+const hostOf = (url) => { try { return new URL(url).host; } catch { return url; } };
+
 let manifestCache = null;
 
 /** Полный список версий Mojang (release / snapshot / old_beta / old_alpha) */
@@ -231,17 +233,35 @@ async function install(id, onProgress = () => {}) {
   for (const lib of v.libraries || []) arts.push(...libArtifacts(lib));
   const natives = arts.filter((a) => a.kind === 'native');
   let done = 0;
+  const failed = [];
   onProgress({ stage: 'Загрузка библиотек', percent: 6, detail: `0/${arts.length}` });
   await pool(arts, 12, async (a) => {
     try {
       await download(a.url, a.path, { sha1: a.sha1, size: a.size });
     } catch (e) {
-      // часть библиотек загрузчиков может отсутствовать в репозитории — не валим установку
-      if (!(await exists(a.path))) console.warn('[lib]', a.url, e.message);
+      if (!(await exists(a.path))) {
+        // библиотеки загрузчиков, собранные из maven-координат, в репозитории бывают не выложены —
+        // их отсутствие не смертельно. А вот файл от Mojang (с sha1) пропускать нельзя.
+        const required = Boolean(a.sha1);
+        console.warn('[lib]', required ? 'обязательная' : 'необязательная', a.url, e.message);
+        if (required) failed.push({ file: path.basename(a.path), host: hostOf(a.url), reason: e.message });
+      }
     }
     done++;
-    onProgress({ stage: 'Загрузка библиотек', percent: 6 + Math.round((done / arts.length) * 34), detail: `${done}/${arts.length}` });
+    onProgress({
+      stage: 'Загрузка библиотек',
+      percent: 6 + Math.round((done / arts.length) * 34),
+      detail: `${done}/${arts.length} · ${path.basename(a.path)}`,
+    });
   });
+
+  if (failed.length) {
+    const hosts = [...new Set(failed.map((f) => f.host))].join(', ');
+    throw new Error(
+      `Не удалось скачать ${failed.length} файлов с ${hosts}: ${failed[0].reason}. `
+      + 'Проверьте интернет и запустите установку снова — уже скачанное не пропадёт.',
+    );
+  }
 
   const nativeDir = path.join(dirs.natives, id);
   if (natives.length) {
