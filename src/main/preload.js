@@ -85,6 +85,8 @@ contextBridge.exposeInMainWorld('api', {
   ai: {
     available: () => invoke('ai:available'),
     explain: () => invoke('ai:explain'),
+    chat: (opts) => invoke('ai:chat', opts),
+    openAgent: () => invoke('ai:openAgent'),
   },
   game: {
     launch: (opts) => invoke('game:launch', opts),

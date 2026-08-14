@@ -143,9 +143,27 @@ function handle(name, fn) {
 }
 
 // ---------- окно ----------
-handle('win:minimize', () => win.minimize());
-handle('win:maximize', () => (win.isMaximized() ? win.unmaximize() : win.maximize()));
-handle('win:close', () => win.close());
+/** Обработчик, которому нужно знать, из какого окна пришёл запрос */
+function handleEvent(name, fn) {
+  ipcMain.handle(name, async (event, ...args) => {
+    try {
+      return { ok: true, data: await fn(event, ...args) };
+    } catch (e) {
+      console.error(`[ipc ${name}]`, e);
+      return { ok: false, error: e.message || String(e) };
+    }
+  });
+}
+
+// кнопки управления работают со своим окном: у помощника оно отдельное
+const senderWin = (event) => BrowserWindow.fromWebContents(event.sender) || win;
+
+handleEvent('win:minimize', (e) => senderWin(e).minimize());
+handleEvent('win:maximize', (e) => {
+  const w = senderWin(e);
+  return w.isMaximized() ? w.unmaximize() : w.maximize();
+});
+handleEvent('win:close', (e) => senderWin(e).close());
 handle('shell:open', (url) => shell.openExternal(url));
 handle('shell:openPath', (p) => shell.openPath(p));
 
@@ -483,6 +501,30 @@ async function explainLastCrash(exitCode) {
 }
 
 handle('ai:available', () => ai.available());
+handle('ai:chat', ({ messages, context }) => ai.chat(messages, { context }));
+
+// помощник живёт в отдельном окне, чтобы не мешать игре и лаунчеру
+let agentWin = null;
+handle('ai:openAgent', () => {
+  if (agentWin && !agentWin.isDestroyed()) { agentWin.focus(); return true; }
+  agentWin = new BrowserWindow({
+    width: 720,
+    height: 640,
+    minWidth: 460,
+    minHeight: 420,
+    frame: false,
+    backgroundColor: '#0d0e11',
+    title: 'Помощник — Plus Launcher',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  agentWin.loadFile(path.join(__dirname, '..', 'renderer', 'agent.html'));
+  agentWin.on('closed', () => { agentWin = null; });
+  return true;
+});
 handle('ai:explain', async () => {
   if (!lastRun) throw new Error('Нет данных о последнем запуске игры');
   return ai.explainCrash({

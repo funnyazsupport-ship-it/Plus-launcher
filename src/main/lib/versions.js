@@ -119,6 +119,14 @@ function libKey(name) {
   return `${parts[0]}:${parts[1]}${parts[3] ? `:${parts[3]}` : ''}`;
 }
 
+/**
+ * Ключ для дедупликации. Важно отличать запись с нативами от обычной:
+ * в старых версиях (до 1.19) одна и та же библиотека описана дважды —
+ * обычным jar-ом и отдельной записью с natives. Схлопывать их нельзя,
+ * иначе игра остаётся без lwjgl.dll и не запускается вовсе.
+ */
+const dedupeKey = (lib) => libKey(lib.name) + (lib.natives ? '#natives' : '');
+
 function libVersion(name) {
   return String(name || '').split('@')[0].split(':')[2] || '0';
 }
@@ -136,7 +144,7 @@ function dedupeLibraries(libs) {
   for (const lib of libs || []) {
     if (!lib?.name) continue;
     if (!matchRules(lib.rules)) continue;      // чужая ОС — сразу мимо
-    const key = libKey(lib.name);
+    const key = dedupeKey(lib);
     const prev = kept.get(key);
     if (!prev) { kept.set(key, lib); continue; }
     if (libVersion(prev.name) !== libVersion(lib.name)) {
@@ -215,8 +223,16 @@ async function extractNatives(files, targetDir) {
 /** Отметка о том, что версия установлена полностью — чтобы не проверять всё заново при каждом запуске */
 const stampFile = (id) => path.join(versionDir(id), '.installed');
 
+// Версия формата отметки. Повышается, когда прошлые сборки могли установить версию неправильно:
+// отметки старого образца игнорируются, и версия проверяется заново целиком.
+// v2 — сборки до 1.2.1 теряли нативные библиотеки у версий до 1.19 (игра падала без lwjgl.dll).
+const STAMP_V = 2;
+
 async function readStamp(id) {
-  try { return JSON.parse(await fsp.readFile(stampFile(id), 'utf8')); } catch { return null; }
+  try {
+    const stamp = JSON.parse(await fsp.readFile(stampFile(id), 'utf8'));
+    return stamp.v === STAMP_V ? stamp : null;
+  } catch { return null; }
 }
 
 async function writeStamp(id, data) {
@@ -282,9 +298,12 @@ async function install(id, onProgress = () => {}, opt = {}) {
       onProgress({ stage: 'Проверка файлов', percent: 20 });
       if (await quickVerify(v, arts)) {
         const nativeDir = path.join(dirs.natives, id);
-        if (!fs.existsSync(nativeDir) || !fs.readdirSync(nativeDir).length) {
+        const need = arts.filter((a) => a.kind === 'native');
+        // каждый jar с нативами даёт хотя бы один файл: меньше — распаковка была неполной
+        const have = fs.existsSync(nativeDir) ? fs.readdirSync(nativeDir).length : 0;
+        if (have < need.length) {
           onProgress({ stage: 'Распаковка нативных библиотек', percent: 60 });
-          await extractNatives(arts.filter((a) => a.kind === 'native' && fs.existsSync(a.path)), nativeDir);
+          await extractNatives(need.filter((a) => fs.existsSync(a.path)), nativeDir);
         }
         onProgress({ stage: 'Файлы на месте', percent: 100 });
         return v;
@@ -379,10 +398,12 @@ async function install(id, onProgress = () => {}, opt = {}) {
   }
 
   await writeStamp(id, {
+    v: STAMP_V,
     at: Date.now(),
     jar: v.jar || v.id,
     assetIndex: v.assetIndex?.id || null,
     libraries: arts.length,
+    natives: natives.length,
   });
 
   onProgress({ stage: 'Готово', percent: 100 });

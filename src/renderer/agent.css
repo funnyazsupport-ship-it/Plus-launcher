@@ -1,0 +1,50 @@
+/* Окно помощника: та же палитра, что и у лаунчера */
+
+body.agent { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.chat {
+  flex: 1; overflow-y: auto; padding: 20px 22px 8px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.hello { margin: auto; text-align: center; max-width: 520px; padding: 20px; }
+.hello-mark { width: 40px; height: 40px; margin-bottom: 14px; }
+.hello h1 { font-size: 20px; font-weight: 650; margin-bottom: 6px; }
+.hello p { margin-bottom: 18px; }
+.hello .chips { justify-content: center; }
+.hello .chip { font-family: inherit; font-size: 12.5px; }
+
+.msg { display: flex; gap: 10px; max-width: 100%; }
+.msg .who {
+  width: 26px; height: 26px; flex-shrink: 0; display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; border: 1px solid var(--line);
+}
+.msg.me .who { background: var(--panel-2); color: var(--dim); }
+.msg.ai .who { background: rgba(116, 192, 69, .14); border-color: rgba(116, 192, 69, .4); color: var(--accent); }
+.msg .body {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 11px 13px; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap;
+  word-break: break-word; user-select: text; min-width: 0;
+}
+.msg.me .body { background: var(--panel-2); }
+.msg.err .body { border-color: #4a2a2e; color: #e88; }
+.msg .body code {
+  font-family: var(--mono); font-size: 12px; background: var(--bg);
+  border: 1px solid var(--line); padding: 1px 5px; border-radius: 2px;
+}
+
+.composer {
+  display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px 14px;
+  background: var(--bg-2); border-top: 1px solid var(--line);
+}
+.composer textarea {
+  flex: 1; resize: none; max-height: 160px; min-height: 38px; line-height: 1.5;
+  font-family: inherit; font-size: 13.5px; padding: 9px 12px;
+}
+.composer .btn { height: 38px; }
+
+.typing { display: inline-flex; gap: 4px; align-items: center; }
+.typing i { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: blink 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: .2s; }
+.typing i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }

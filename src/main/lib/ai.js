@@ -110,6 +110,68 @@ async function explainCrash({ log = '', gameDir = '', instance = {}, exitCode = 
   }
 }
 
+const AGENT_SYSTEM = `Ты — помощник внутри лаунчера Minecraft «Plus Launcher». Отвечай по-русски, дружелюбно и коротко.
+
+Что ты знаешь про лаунчер:
+— Сборки: у каждой версии своя папка в папке лаунчера, внутри mods, saves, config, resourcepacks, shaderpacks.
+— Моды ставятся во вкладке «Моды» — поиск идёт сразу по Modrinth и CurseForge, зависимости подтягиваются сами.
+— Загрузчики: Fabric, Quilt, Forge, NeoForge — выбираются при создании сборки во вкладке «Версии».
+— Вкладка «Скины» умеет грузить скин на лицензию Microsoft и класть локальный скин для оффлайна.
+— Java лаунчер находит сам, при необходимости скачивает нужную версию.
+— Память и аргументы JVM меняются в «Настройках», там же папка лаунчера и статус в Discord.
+
+Помогай с ошибками, модами, версиями и настройками. Если вопрос не про Minecraft и не про лаунчер —
+всё равно ответь, но коротко. Не выдумывай моды и функции, которых нет. Без markdown-заголовков,
+списки — обычными цифрами или дефисами.`;
+
+/**
+ * Свободный разговор с помощником.
+ * @param {Array<{role:'user'|'assistant', content:string}>} messages
+ */
+async function chat(messages, { context = '' } = {}) {
+  const key = embeddedKey('deepseek');
+  if (!key) throw new Error('В сборке нет ключа помощника');
+
+  const history = (messages || []).slice(-16).map((m) => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: String(m.content).slice(0, 6000),
+  }));
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      signal: ac.signal,
+      body: JSON.stringify({
+        model: MODEL,
+        temperature: 0.4,
+        max_tokens: 900,
+        messages: [
+          { role: 'system', content: AGENT_SYSTEM + (context ? `\n\nЧто сейчас в лаунчере:\n${context}` : '') },
+          ...history,
+        ],
+      }),
+    });
+    const raw = await res.text();
+    if (!res.ok) {
+      if (res.status === 401) throw new Error('Ключ помощника не принят сервисом');
+      if (res.status === 402) throw new Error('На аккаунте помощника закончились средства');
+      if (res.status === 429) throw new Error('Слишком много запросов — попробуйте через минуту');
+      throw new Error(`Сервис ответил ошибкой ${res.status}`);
+    }
+    const text = JSON.parse(raw).choices?.[0]?.message?.content?.trim();
+    if (!text) throw new Error('Пустой ответ от сервиса');
+    return { text };
+  } catch (e) {
+    if (ac.signal.aborted) throw new Error('Сервис не ответил вовремя');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const available = () => Boolean(embeddedKey('deepseek'));
 
-module.exports = { explainCrash, available, anonymize, squeezeLog };
+module.exports = { explainCrash, chat, available, anonymize, squeezeLog };

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+<title>Помощник — Plus Launcher</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="agent.css" />
+</head>
+<body class="agent">
+
+<svg class="sprite" aria-hidden="true"><defs>
+  <symbol id="i-logo" viewBox="0 0 48 48">
+    <path d="M24 4 44 15 24 26 4 15Z" fill="#8fd45a"/>
+    <path d="M4 15 24 26v18L4 33Z" fill="#5da336"/>
+    <path d="M44 15 24 26v18l20-11Z" fill="#3f7526"/>
+    <path d="M24 4 44 15 24 26 4 15Z" fill="none" stroke="#0d0e11" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M4 15v18l20 11 20-11V15" fill="none" stroke="#0d0e11" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M24 26v18" fill="none" stroke="#0d0e11" stroke-width="1.5"/>
+  </symbol>
+  <symbol id="i-send" viewBox="0 0 16 16"><path d="M2 8 14 2.5 10 14l-2.5-4.5L2 8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4m-6.5 0 .8 9.5h7.4L12.5 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-min" viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.2"/></symbol>
+  <symbol id="i-max" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2"/></symbol>
+</defs></svg>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark"><use href="#i-logo"/></svg>
+    <div class="brand-text"><b>ПОМОЩНИК</b><span>PLUS LAUNCHER</span></div>
+  </div>
+  <div class="drag"></div>
+  <div class="winctl">
+    <button id="a-min" title="Свернуть"><svg><use href="#i-min"/></svg></button>
+    <button id="a-max" title="Развернуть"><svg><use href="#i-max"/></svg></button>
+    <button id="a-close" class="x" title="Закрыть"><svg><use href="#i-x"/></svg></button>
+  </div>
+</header>
+
+<main class="chat" id="chat">
+  <div class="hello">
+    <svg class="hello-mark"><use href="#i-logo"/></svg>
+    <h1>Чем помочь?</h1>
+    <p class="dim">Спросите про моды, версии, ошибки или настройки лаунчера.</p>
+    <div class="chips" id="quick">
+      <button class="chip pick" data-q="Игра вылетела — разбери мой последний запуск">Разобрать последний вылет</button>
+      <button class="chip pick" data-q="Посоветуй моды на оптимизацию для моей сборки">Моды на оптимизацию</button>
+      <button class="chip pick" data-q="Сколько памяти выделить и какие аргументы JVM поставить?">Сколько памяти выделить</button>
+      <button class="chip pick" data-q="Чем отличаются Fabric, Quilt, Forge и NeoForge?">Чем отличаются загрузчики</button>
+    </div>
+  </div>
+</main>
+
+<footer class="composer">
+  <textarea id="input" rows="1" placeholder="Напишите вопрос… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+  <button class="btn" id="clear" title="Очистить переписку"><svg><use href="#i-trash"/></svg></button>
+  <button class="btn accent" id="send"><svg><use href="#i-send"/></svg>Спросить</button>
+</footer>
+
+<script src="agent.js"></script>
+</body>
+</html>

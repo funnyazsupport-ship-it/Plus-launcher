@@ -99,13 +99,17 @@ function activeAccount() {
 // ---------------- навигация ----------------
 
 function go(page) {
-  $$('.rail-item').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
+  $$('.rail-item[data-page]').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
   $$('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${page}`));
   if (page === 'mods') { syncInstanceSelects(); if (!$('#mods-list').children.length) searchMods(true); }
   if (page === 'settings') loadJavaList();
   if (page === 'skins') { syncInstanceSelects(); loadSkins(); loadSkinProfile(); }
 }
-$$('.rail-item').forEach((b) => b.addEventListener('click', () => go(b.dataset.page)));
+$$('.rail-item').forEach((b) => {
+  if (!b.dataset.page) return;                 // «Помощник» открывает отдельное окно
+  b.addEventListener('click', () => go(b.dataset.page));
+});
+$('#open-agent').addEventListener('click', () => app.ai.openAgent());
 $('#go-create').addEventListener('click', () => go('versions'));
 $('#go-create-2').addEventListener('click', () => go('versions'));
 
