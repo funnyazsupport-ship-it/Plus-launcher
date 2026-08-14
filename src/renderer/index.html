@@ -5,6 +5,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
   <title>Plus Launcher</title>
+  <script src="boot.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -257,9 +258,25 @@
         </div>
 
         <div class="panel">
-          <div class="side-head"><span class="lbl">Оффлайн-профиль</span></div>
-          <p class="dim">Одиночная игра и сервера без лицензии.</p>
-          <label class="f"><span class="lbl">Ник</span><input id="off-name" placeholder="Steve" maxlength="16" /></label>
+          <div class="side-head"><span class="lbl">Ely.by</span></div>
+          <p class="dim">Бесплатные аккаунты со своими скинами и плащами. Работают на серверах, которые их поддерживают.</p>
+          <label class="f"><span class="lbl">Почта или ник</span><input id="ely-login" autocomplete="username" placeholder="steve@mail.ru" /></label>
+          <label class="f"><span class="lbl">Пароль</span><input id="ely-pass" type="password" autocomplete="current-password" /></label>
+          <label class="f" id="ely-totp-wrap" hidden>
+            <span class="lbl">Код двухфакторной защиты</span>
+            <input id="ely-totp" class="mono" inputmode="numeric" maxlength="6" placeholder="123456" />
+          </label>
+          <button class="btn accent" id="ely-login-btn">Войти через Ely.by</button>
+          <p class="note" id="ely-note" hidden></p>
+          <p class="dim">Нет аккаунта? <b class="lnk" id="ely-signup">Зарегистрироваться на ely.by</b></p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="side-head"><span class="lbl">Оффлайн-профиль</span></div>
+        <p class="dim">Одиночная игра и сервера без лицензии. Скин можно поставить локально во вкладке «Скины».</p>
+        <div class="form-row">
+          <label class="f grow"><span class="lbl">Ник</span><input id="off-name" placeholder="Steve" maxlength="16" /></label>
           <button class="btn" id="off-add">Добавить</button>
         </div>
       </div>
@@ -271,6 +288,21 @@
     <!-- НАСТРОЙКИ -->
     <section class="page" id="page-settings">
       <div class="head"><div><h1>Настройки</h1><p class="dim">Память, Java и поведение лаунчера</p></div></div>
+
+      <div class="panel">
+        <div class="side-head"><span class="lbl">Язык и оформление</span></div>
+        <div class="form-row">
+          <label class="f grow"><span class="lbl">Язык</span><select id="s-lang"></select></label>
+          <div class="f grow"><span class="lbl">Тема</span>
+            <div class="seg" id="s-theme">
+              <button data-theme="dark" class="on">Тёмная</button>
+              <button data-theme="light">Светлая</button>
+              <button data-theme="system">Как в системе</button>
+            </div>
+          </div>
+        </div>
+        <p class="dim">Язык интерфейса меняется сразу, перезапуск не нужен. Помощник отвечает на языке вопроса.</p>
+      </div>
 
       <div class="panel">
         <div class="side-head"><span class="lbl">Оперативная память</span><span class="count mono" id="ram-label">4096 МБ</span></div>
@@ -432,6 +464,7 @@
   </div>
 </div>
 
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

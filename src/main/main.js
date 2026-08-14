@@ -12,6 +12,7 @@ const versions = require('./lib/versions');
 const loaders = require('./lib/loaders');
 const javaLib = require('./lib/java');
 const auth = require('./lib/auth');
+const ely = require('./lib/ely');
 const mods = require('./lib/mods');
 const skins = require('./lib/skins');
 const storage = require('./lib/storage');
@@ -344,9 +345,23 @@ handle('auth:offline', (name) => {
   return account;
 });
 
+/** Вход Ely.by. Пароль живёт только внутри этого вызова и никуда не сохраняется. */
+handle('auth:ely', async ({ login, password, totp }) => {
+  const account = await ely.login(login, password, totp);
+  const accounts = config.load().accounts.filter((a) => a.uuid !== account.uuid);
+  accounts.push(account);
+  config.save({ accounts, activeAccount: account.uuid });
+  // агент качаем сразу, чтобы первый запуск игры не ждал загрузки
+  ely.ensureInjector().catch((e) => console.warn('[ely]', e.message));
+  return account;
+});
+
 handle('auth:select', (uuid) => config.save({ activeAccount: uuid }));
-handle('auth:remove', (uuid) => {
+handle('auth:remove', async (uuid) => {
   const cfg = config.load();
+  const gone = cfg.accounts.find((a) => a.uuid === uuid);
+  // токен Ely.by гасим на сервисе, иначе он останется рабочим до истечения срока
+  if (gone?.type === 'ely') await ely.logout(gone).catch(() => {});
   const accounts = cfg.accounts.filter((a) => a.uuid !== uuid);
   return config.save({ accounts, activeAccount: cfg.activeAccount === uuid ? accounts[0]?.uuid || null : cfg.activeAccount });
 });
@@ -355,12 +370,23 @@ async function activeAccount() {
   const cfg = config.load();
   let acc = cfg.accounts.find((a) => a.uuid === cfg.activeAccount) || cfg.accounts[0];
   if (!acc) throw new Error('Сначала добавьте аккаунт во вкладке «Аккаунт»');
-  if (acc.type === 'microsoft' && acc.expiresAt && Date.now() > acc.expiresAt - 60000) {
+
+  const stale = acc.expiresAt && Date.now() > acc.expiresAt - 60000;
+  const remember = (fresh) => {
+    config.save({ accounts: cfg.accounts.map((a) => (a.uuid === fresh.uuid ? fresh : a)) });
+    return fresh;
+  };
+
+  if (acc.type === 'microsoft' && stale) {
     if (!acc.refreshToken) throw new Error('Сессия Microsoft истекла — войдите заново');
-    const fresh = await auth.refresh(appConfig.msClientId, acc.refreshToken);
-    const accounts = cfg.accounts.map((a) => (a.uuid === fresh.uuid ? fresh : a));
-    config.save({ accounts });
-    acc = fresh;
+    acc = remember(await auth.refresh(appConfig.msClientId, acc.refreshToken));
+  } else if (acc.type === 'ely' && stale) {
+    try {
+      acc = remember(await ely.refresh(acc));
+    } catch (e) {
+      if (e.needLogin) throw new Error('Сессия Ely.by истекла — войдите заново во вкладке «Аккаунт»');
+      throw e;
+    }
   }
   return acc;
 }

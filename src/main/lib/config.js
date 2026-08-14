@@ -24,6 +24,9 @@ const DEFAULTS = {
   // Ключ CurseForge API хранится зашифрованным в curseforgeKeyEnc — открытым текстом его тут нет
   curseforgeKeyEnc: '',
   checkUpdatesOnStart: true,
+  // Язык интерфейса (ru, en, uk) и тема оформления (dark, light, system)
+  lang: 'ru',
+  theme: 'dark',
   // Зеркала для файлов игры: auto — официальный сервер, зеркало как запасной;
   // mirror — сразу через зеркало; off — только официальные серверы.
   mirrors: 'auto',

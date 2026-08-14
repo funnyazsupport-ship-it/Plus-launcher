@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('api', {
   auth: {
     login: (opts) => invoke('auth:login', opts),
     cancel: () => invoke('auth:cancel'),
+    ely: (creds) => invoke('auth:ely', creds),
     offline: (name) => invoke('auth:offline', name),
     select: (uuid) => invoke('auth:select', uuid),
     remove: (uuid) => invoke('auth:remove', uuid),

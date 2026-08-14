@@ -4,7 +4,15 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
 const COLORS = ['#74c045', '#4a9bd8', '#8f7ae0', '#e08a3a', '#d05555', '#8a909c'];
-const AVATAR = (uuid) => `https://mc-heads.net/avatar/${uuid || 'MHF_Steve'}/64`;
+/**
+ * Аватар профиля. У Ely.by свой сервис скинов, и Mojang про их ник не знает,
+ * поэтому для таких профилей просим отрисовать голову по нику, а не по UUID.
+ */
+function AVATAR(acc) {
+  if (!acc) return 'https://mc-heads.net/avatar/MHF_Steve/64';
+  const key = acc.type === 'microsoft' ? acc.uuid : acc.name;
+  return `https://mc-heads.net/avatar/${encodeURIComponent(key || 'MHF_Steve')}/64`;
+}
 
 const state = {
   cfg: null,
@@ -148,7 +156,8 @@ function renderInstances() {
     el.querySelector('.fld').addEventListener('click', (e) => { e.stopPropagation(); app.instances.folder(inst.id); });
     el.querySelector('.del').addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm(`Удалить сборку «${inst.name}»?\n\nПапка ${inst.folder || inst.mc} со всеми модами и мирами будет удалена.`)) return;
+      // системное окно не проходит через перевод разметки — переводим строку сами
+      if (!confirm(i18n.t(`Удалить сборку «${inst.name}»?\n\nПапка ${inst.folder || inst.mc} со всеми модами и мирами будет удалена.`))) return;
       await call(app.instances.remove(inst.id, true));
       state.instances = await call(app.instances.list());
       if (state.selected === inst.id) state.selected = state.instances[0]?.id || null;
@@ -449,7 +458,7 @@ async function renderInstalledMods() {
     el.querySelector('span').title = m.file;
     el.querySelector('.t').addEventListener('click', async () => { await call(app.mods.toggle(ctx.instance, m.file, ctx.kind)); renderInstalledMods(); });
     el.querySelector('.d').addEventListener('click', async () => {
-      if (!confirm(`Удалить ${m.file}?`)) return;
+      if (!confirm(i18n.t(`Удалить ${m.file}?`))) return;
       await call(app.mods.remove(ctx.instance, m.file, ctx.kind)); renderInstalledMods();
     });
     box.appendChild(el);
@@ -610,7 +619,7 @@ $('#skin-add').addEventListener('click', async () => {
 $('#skin-delete').addEventListener('click', async () => {
   const s = state.skins.current;
   if (!s) return toast('Сначала выберите скин', 'err');
-  if (!confirm(`Удалить ${s.name} из библиотеки?`)) return;
+  if (!confirm(i18n.t(`Удалить ${s.name} из библиотеки?`))) return;
   await call(app.skins.remove(s.file));
   state.skins.current = null;
   await loadSkins();
@@ -676,7 +685,7 @@ $('#skin-mod').addEventListener('click', async (e) => {
 $('#skin-reset').addEventListener('click', async () => {
   const acc = activeAccount();
   if (!acc || acc.type !== 'microsoft') return toast('Сброс работает только для лицензии Microsoft', 'err');
-  if (!confirm('Вернуть стандартный скин на аккаунте Mojang?')) return;
+  if (!confirm(i18n.t('Вернуть стандартный скин на аккаунте Mojang?'))) return;
   await call(app.skins.reset());
   toast('Скин сброшен');
   loadSkinProfile();
@@ -684,14 +693,17 @@ $('#skin-reset').addEventListener('click', async () => {
 
 // ---------------- аккаунты ----------------
 
+/** Подпись под ником профиля */
+const accKind = (type) => ({ microsoft: 'лицензия', ely: 'Ely.by', offline: 'оффлайн' }[type] || 'оффлайн');
+
 function renderAccounts() {
   const box = $('#accounts');
   box.innerHTML = state.cfg.accounts.length ? '' : '<span class="dim">профилей нет</span>';
   for (const a of state.cfg.accounts) {
     const el = document.createElement('div');
     el.className = `acc${a.uuid === state.cfg.activeAccount ? ' on' : ''}`;
-    el.innerHTML = `<img src="${AVATAR(a.uuid)}" alt="" />
-      <div class="grow"><div class="acc-name"></div><div class="acc-kind">${a.type === 'microsoft' ? 'лицензия' : 'оффлайн'}</div></div>
+    el.innerHTML = `<img src="${AVATAR(a)}" alt="" />
+      <div class="grow"><div class="acc-name"></div><div class="acc-kind">${accKind(a.type)}</div></div>
       <button class="ico-btn">${icon('trash')}</button>`;
     el.querySelector('.acc-name').textContent = a.name;
     el.addEventListener('click', async () => {
@@ -710,8 +722,8 @@ function renderAccounts() {
 function renderWho() {
   const a = activeAccount();
   $('#acc-name').textContent = a ? a.name : 'нет профиля';
-  $('#acc-type').textContent = a ? (a.type === 'microsoft' ? 'лицензия' : 'оффлайн') : 'не выполнен вход';
-  $('#acc-avatar').src = a ? AVATAR(a.uuid) : AVATAR(null);
+  $('#acc-type').textContent = a ? accKind(a.type) : 'не выполнен вход';
+  $('#acc-avatar').src = AVATAR(a);
 }
 
 $('#ms-login').addEventListener('click', async () => {
@@ -743,6 +755,53 @@ $('#off-add').addEventListener('click', async () => {
   renderAccounts(); renderWho();
   toast('Профиль добавлен');
 });
+
+// ---------------- Ely.by ----------------
+
+$('#ely-signup').addEventListener('click', () => app.shell.open('https://account.ely.by/register'));
+
+async function elyLogin() {
+  const btn = $('#ely-login-btn');
+  const note = $('#ely-note');
+  const login = $('#ely-login').value.trim();
+  const password = $('#ely-pass').value;
+  const totp = $('#ely-totp').value.trim();
+  if (!login || !password) { note.hidden = false; note.className = 'note err'; note.textContent = 'Введите почту и пароль'; return; }
+
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.innerHTML = '<span class="spin"></span> вход…';
+  note.hidden = true;
+  try {
+    const acc = await call(app.auth.ely({ login, password, totp }), true);
+    // пароль в поле не держим ни секунды дольше, чем нужно
+    $('#ely-pass').value = '';
+    $('#ely-totp').value = '';
+    $('#ely-totp-wrap').hidden = true;
+    state.cfg = await call(app.config.get());
+    renderAccounts(); renderWho();
+    toast(`Вход выполнен: ${acc.name}`);
+  } catch (e) {
+    note.hidden = false;
+    note.className = 'note err';
+    // на аккаунте включена двухфакторка — показываем поле для кода
+    if (/двухфактор/i.test(e.message)) {
+      $('#ely-totp-wrap').hidden = false;
+      note.className = 'note warn';
+      note.textContent = 'Введите код из приложения-аутентификатора и нажмите вход ещё раз.';
+      $('#ely-totp').focus();
+    } else {
+      note.textContent = e.message;
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+$('#ely-login-btn').addEventListener('click', elyLogin);
+['#ely-login', '#ely-pass', '#ely-totp'].forEach((s) =>
+  $(s).addEventListener('keydown', (e) => { if (e.key === 'Enter') elyLogin(); }));
 
 // ---------------- настройки ----------------
 
@@ -805,7 +864,58 @@ function bindSettings() {
   app.update.version().then((r) => { if (r.ok) $('#app-version').textContent = `v${r.data}`; });
 
   initMirrors(cfg.mirrors || 'auto');
+  initLook(cfg);
   loadStorage();
+}
+
+// ---------------- язык и тема ----------------
+
+/** Во что превращается выбор темы: «как в системе» спрашивает у Windows */
+function resolveTheme(mode) {
+  if (mode === 'light' || mode === 'dark') return mode;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(mode) {
+  const real = resolveTheme(mode);
+  document.documentElement.setAttribute('data-theme', real);
+  // boot.js прочитает это при следующем запуске и покрасит окно ещё до отрисовки
+  try { localStorage.setItem('theme', real); } catch { /* приватный режим */ }
+}
+
+function initLook(cfg) {
+  // язык
+  const sel = $('#s-lang');
+  sel.innerHTML = '';
+  for (const l of i18n.LANGS) {
+    const o = document.createElement('option');
+    o.value = l.id;
+    o.textContent = l.name;
+    sel.appendChild(o);
+  }
+  sel.value = cfg.lang || i18n.getLang();
+  i18n.setLang(sel.value);
+  sel.addEventListener('change', async (e) => {
+    i18n.setLang(e.target.value);
+    state.cfg = await call(app.config.set({ lang: e.target.value }));
+  });
+
+  // тема
+  const seg = $('#s-theme');
+  const mode = cfg.theme || 'dark';
+  const paint = (m) => seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.theme === m));
+  paint(mode);
+  applyTheme(mode);
+  seg.querySelectorAll('button').forEach((b) => b.addEventListener('click', async () => {
+    paint(b.dataset.theme);
+    applyTheme(b.dataset.theme);
+    state.cfg = await call(app.config.set({ theme: b.dataset.theme }));
+  }));
+
+  // системная тема может смениться на ходу — следим, только если выбрано «как в системе»
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    if ((state.cfg.theme || 'dark') === 'system') applyTheme('system');
+  });
 }
 
 // ---------------- соединение и зеркала ----------------

@@ -27,7 +27,7 @@ body.agent { display: flex; flex-direction: column; height: 100vh; overflow: hid
   word-break: break-word; user-select: text; min-width: 0;
 }
 .msg.me .body { background: var(--panel-2); }
-.msg.err .body { border-color: #4a2a2e; color: #e88; }
+.msg.err .body { border-color: var(--danger-line); color: var(--danger-text); }
 .msg .body code {
   font-family: var(--mono); font-size: 12px; background: var(--bg);
   border: 1px solid var(--line); padding: 1px 5px; border-radius: 2px;

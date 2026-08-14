@@ -81,7 +81,8 @@ async function launch(opt, onEvent = () => {}) {
     auth_session: `token:${account.accessToken || '0'}:${account.uuid}`,
     auth_xuid: account.xuid || '0',
     clientid: account.clientId || '0',
-    user_type: account.type === 'microsoft' ? 'msa' : 'legacy',
+    // Ely.by ходит по протоколу Mojang, но игре важно, чтобы тип был современным
+    user_type: account.type === 'offline' ? 'legacy' : 'msa',
     user_properties: '{}',
     version_type: v.type || 'release',
     natives_directory: nativesDir,
@@ -108,6 +109,13 @@ async function launch(opt, onEvent = () => {}) {
   jvm.push(`-Xms${config.minRam || 1024}M`, `-Xmx${config.maxRam || 4096}M`);
   jvm.push(...String(config.jvmArgs || '').split(/\s+/).filter(Boolean));
   if (process.platform === 'darwin') jvm.push('-XstartOnFirstThread');
+
+  // Аккаунт Ely.by: агент перенаправляет проверку сессии и скины с Mojang на Ely.by.
+  // Ставим до аргументов версии — javaagent должен идти в начале списка.
+  if (account.type === 'ely') {
+    onEvent('progress', { stage: 'Подготовка Ely.by', percent: 40 });
+    jvm.push(...await require('./ely').jvmArgs((p) => onEvent('progress', p)));
+  }
 
   if (v.arguments?.jvm) {
     jvm.push(...flatten(v.arguments.jvm, features).map((a) => subst(a, vars)));
