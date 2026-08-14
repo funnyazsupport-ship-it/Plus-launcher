@@ -634,6 +634,9 @@ handle('game:kill', async () => {
   // убить только своего потомка мало — игра останется висеть в памяти.
   if (process.platform === 'win32') {
     await new Promise((resolve) => execFile('taskkill', ['/PID', String(pid), '/T', '/F'], () => resolve()));
+  } else {
+    // на Unix игра запущена в своей группе (detached), отрицательный pid бьёт по всей группе
+    try { process.kill(-pid, 'SIGKILL'); } catch { /* группы уже нет */ }
   }
   try { child.kill('SIGKILL'); } catch { /* уже мёртв */ }
 

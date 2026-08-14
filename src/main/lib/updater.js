@@ -7,6 +7,19 @@ const { getJSON } = require('./net');
 let autoUpdater = null;
 try { ({ autoUpdater } = require('electron-updater')); } catch { /* работаем без автоустановки */ }
 
+/*
+ * У каждой системы свой файл с описанием обновления и свой установщик.
+ * electron-updater кладёт их в релиз рядом: latest.yml, latest-mac.yml, latest-linux.yml.
+ * Без нужного файла автоустановка невозможна — остаётся ссылка на страницу релиза.
+ */
+const PLATFORM = {
+  win32: { feed: 'latest.yml', installer: /\.exe$/i, label: 'Windows' },
+  darwin: { feed: 'latest-mac.yml', installer: /\.(dmg|pkg)$/i, label: 'macOS' },
+  linux: { feed: 'latest-linux.yml', installer: /\.(AppImage|deb|rpm|tar\.gz)$/i, label: 'Linux' },
+};
+
+const forPlatform = () => PLATFORM[process.platform] || PLATFORM.linux;
+
 /** "owner/repo", "github.com/owner/repo", полный URL — всё приводим к {owner, repo} */
 function parseRepo(value) {
   const s = String(value || '').trim();
@@ -77,9 +90,10 @@ async function check() {
 
   const now = current();
   const hasUpdate = cmpVersion(release.version, now) > 0;
-  // автоустановка возможна, только если в релизе лежит latest.yml от electron-builder
+  const plat = forPlatform();
+  // автоустановка возможна, только если в релизе есть файл описания для этой системы
   const canAutoInstall = Boolean(autoUpdater) && app.isPackaged
-    && release.assets.some((a) => a.name === 'latest.yml');
+    && release.assets.some((a) => a.name === plat.feed);
 
   return {
     current: now,
@@ -90,7 +104,8 @@ async function check() {
     url: release.url,
     published: release.published,
     repo: `${repo.owner}/${repo.repo}`,
-    setup: release.assets.find((a) => /\.exe$/i.test(a.name)) || null,
+    platform: plat.label,
+    setup: release.assets.find((a) => plat.installer.test(a.name)) || null,
   };
 }
 

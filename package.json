@@ -6,7 +6,11 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "key": "node scripts/make-embedded-key.js",
     "build": "electron-builder --win",
+    "build:win": "electron-builder --win -p never",
+    "build:linux": "electron-builder --linux -p never",
+    "build:mac": "electron-builder --mac -p never",
     "release": "electron-builder --win -p never",
     "publish": "electron-builder --win -p always"
   },
@@ -40,7 +44,12 @@
     ],
     "win": {
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "build/icon.ico",
       "artifactName": "PlusLauncher-Setup-${version}.${ext}"
@@ -57,6 +66,64 @@
       "uninstallDisplayName": "Plus Launcher",
       "include": "build/installer.nsh",
       "deleteAppDataOnUninstall": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.games",
+      "artifactName": "PlusLauncher-${version}-${arch}.${ext}",
+      "identity": null,
+      "darkModeSupport": true
+    },
+    "dmg": {
+      "artifactName": "PlusLauncher-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Game",
+      "synopsis": "Лаунчер Minecraft со всеми версиями, модами и загрузчиками",
+      "description": "Plus Launcher — лаунчер Minecraft: все версии Mojang, Fabric, Quilt, Forge и NeoForge, моды с Modrinth и CurseForge, скины, вход через Ely.by.",
+      "maintainer": "Plus Launcher <noreply@users.noreply.github.com>",
+      "executableName": "plus-launcher",
+      "desktop": {
+        "StartupWMClass": "Plus Launcher"
+      },
+      "artifactName": "PlusLauncher-${version}-${arch}.${ext}"
     }
   }
 }

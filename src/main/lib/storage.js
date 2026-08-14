@@ -19,12 +19,25 @@ async function dirSize(dir) {
   return total;
 }
 
-/** Свободное место на диске, где лежит путь */
+/**
+ * Свободное место там, где лежит путь.
+ * Спрашиваем про сам путь, а не про корень диска: на Linux и macOS домашняя папка
+ * или выбранная папка часто оказываются на отдельном разделе, и корень покажет чужие цифры.
+ * Если папки ещё нет — поднимаемся к ближайшей существующей.
+ */
 async function freeSpace(p) {
-  try {
-    const st = await fsp.statfs(path.parse(path.resolve(p)).root);
-    return st.bsize * st.bavail;
-  } catch { return null; }
+  let dir = path.resolve(p);
+  for (let i = 0; i < 12; i++) {
+    try {
+      const st = await fsp.statfs(dir);
+      return st.bsize * st.bavail;
+    } catch {
+      const parent = path.dirname(dir);
+      if (parent === dir) return null;
+      dir = parent;
+    }
+  }
+  return null;
 }
 
 function isInside(child, parent) {

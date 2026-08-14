@@ -1,0 +1,66 @@
+name: Сборка лаунчера
+
+# Запускается вручную или при публикации релиза. Собирает на трёх системах:
+# macOS и Linux можно собрать только на них самих, с Windows это не сделать.
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write        # нужно, чтобы приложить файлы к релизу
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false   # упавшая сборка под одну систему не должна отменять остальные
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: ubuntu-latest
+            name: Linux
+          - os: macos-latest
+            name: macOS
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Вшить ключи из секретов
+        env:
+          CURSEFORGE_KEY: ${{ secrets.CURSEFORGE_KEY }}
+          DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
+        run: node scripts/make-embedded-key.js
+
+      - name: Сборка
+        env:
+          # electron-builder сам приложит файлы к релизу, если он опубликован
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --${{ matrix.os == 'windows-latest' && 'win' || matrix.os == 'macos-latest' && 'mac' || 'linux' }} --publish ${{ github.event_name == 'release' && 'always' || 'never' }}
+
+      - name: Сохранить сборку
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlusLauncher-${{ matrix.name }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.tar.gz
+            dist/*.dmg
+            dist/*.zip
+            dist/latest*.yml

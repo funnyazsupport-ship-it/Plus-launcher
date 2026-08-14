@@ -139,7 +139,13 @@ async function launch(opt, onEvent = () => {}) {
   onEvent('progress', { stage: 'Запуск Minecraft', percent: 95 });
   onEvent('log', `[launcher] ${javaPath}\n[launcher] mainClass=${v.mainClass} libs=${classpath.length}`);
 
-  const child = spawn(javaPath, args, { cwd: gameDir, windowsHide: false });
+  // detached на Unix даёт игре свою группу процессов: игра поднимает второй java,
+  // и убить её потом можно только всей группой разом (на Windows это делает taskkill /T).
+  const child = spawn(javaPath, args, {
+    cwd: gameDir,
+    windowsHide: false,
+    detached: process.platform !== 'win32',
+  });
   child.stdout.on('data', (d) => onEvent('log', d.toString()));
   child.stderr.on('data', (d) => onEvent('log', d.toString()));
   child.on('error', (e) => onEvent('log', `[error] ${e.message}`));

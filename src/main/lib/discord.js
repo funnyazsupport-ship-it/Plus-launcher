@@ -8,12 +8,40 @@ const crypto = require('crypto');
  */
 const OP = { HANDSHAKE: 0, FRAME: 1, CLOSE: 2, PING: 3, PONG: 4 };
 
-// PLUS_DISCORD_PIPE — явный канал (используется в тестах вместо перебора 0..9)
-const pipePath = (i) => process.env.PLUS_DISCORD_PIPE || (process.platform === 'win32'
-  ? `\\\\?\\pipe\\discord-ipc-${i}`
-  : `${process.env.XDG_RUNTIME_DIR || process.env.TMPDIR || '/tmp'}/discord-ipc-${i}`);
+/*
+ * Где искать сокет Discord.
+ * На Windows это именованный канал. На Linux и macOS — файл сокета во временной папке,
+ * причём Flatpak и Snap прячут его в свои подкаталоги, поэтому проверяем все варианты:
+ * иначе у половины линуксоводов статус просто не появится.
+ */
+function socketDirs() {
+  const base = (process.env.XDG_RUNTIME_DIR || process.env.TMPDIR || process.env.TMP || '/tmp')
+    .replace(/\/+$/, '');                          // TMPDIR на macOS приходит со слешем на конце
+  // На macOS Discord ставится одним способом, поэтому лишние каталоги там только
+  // растянули бы перебор: Flatpak и Snap бывают только в Linux.
+  if (process.platform !== 'linux') return [base];
+  return [
+    base,
+    `${base}/app/com.discordapp.Discord`,          // Flatpak
+    `${base}/app/com.discordapp.DiscordCanary`,
+    `${base}/snap.discord`,                        // Snap
+    `${base}/.flatpak/dev.vencord.Vesktop/xdg-run`,
+  ];
+}
 
-const lastPipeIndex = () => (process.env.PLUS_DISCORD_PIPE ? 0 : 9);
+/** Все возможные адреса сокета: сначала канал 0 во всех папках, потом канал 1 и так далее */
+function pipeList() {
+  if (process.env.PLUS_DISCORD_PIPE) return [process.env.PLUS_DISCORD_PIPE];
+  const out = [];
+  for (let i = 0; i <= 9; i++) {
+    if (process.platform === 'win32') out.push(`\\\\?\\pipe\\discord-ipc-${i}`);
+    else for (const dir of socketDirs()) out.push(`${dir}/discord-ipc-${i}`);
+  }
+  return out;
+}
+
+const pipePath = (i) => pipeList()[i];
+const lastPipeIndex = () => pipeList().length - 1;
 
 let socket = null;
 let connected = false;
