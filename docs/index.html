@@ -10,7 +10,7 @@
 <!-- превью при отправке ссылки в мессенджеры -->
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Plus Launcher — лаунчер Minecraft" />
-<meta property="og:description" content="Все версии, Fabric/Quilt/Forge/NeoForge, моды с Modrinth и CurseForge, лицензия Microsoft, скины и статус в Discord." />
+<meta property="og:description" content="Все версии, Fabric/Quilt/Forge/NeoForge, моды с Modrinth и CurseForge, вход через Ely.by, скины и статус в Discord." />
 <meta property="og:image" content="img/play.png" />
 <meta name="theme-color" content="#0d0e11" />
 </head>
@@ -54,7 +54,7 @@
   <section class="hero">
     <div class="hero-text">
       <p class="eyebrow mono">Лаунчер Minecraft для Windows</p>
-      <h1>Все версии, моды и лицензия — <span class="accent">в одном окне</span></h1>
+      <h1>Все версии, моды и скины — <span class="accent">в одном окне</span></h1>
       <p class="lead">
         От alpha 2010 года до свежих снапшотов. Fabric, Quilt, Forge и NeoForge ставятся в один клик,
         моды ищутся сразу на Modrinth и CurseForge, у каждой версии своя папка со своими модами и мирами.
@@ -105,13 +105,13 @@
       </article>
       <article class="card">
         <svg class="card-ico"><use href="#i-user"/></svg>
-        <h3>Лицензия Microsoft</h3>
-        <p>Вход по коду устройства с проверкой покупки игры. Есть и оффлайн-профиль для одиночной игры.</p>
+        <h3>Вход через Ely.by</h3>
+        <p>Бесплатный аккаунт со своими скинами и плащами. Есть и оффлайн-профиль для одиночной игры.</p>
       </article>
       <article class="card">
         <svg class="card-ico"><use href="#i-skin"/></svg>
         <h3>Скины</h3>
-        <p>Загрузка скина прямо на аккаунт Mojang, выбор Classic или Slim, плащи. Для оффлайна — локальные скины.</p>
+        <p>Свой скин из PNG с предпросмотром, Classic или Slim. В оффлайне скин подхватывает CustomSkinLoader.</p>
       </article>
       <article class="card">
         <svg class="card-ico"><use href="#i-discord"/></svg>
@@ -138,7 +138,7 @@
   <section id="install" class="section">
     <h2>Установка</h2>
     <ol class="steps">
-      <li><span class="num mono">1</span><div><h3>Скачайте установщик</h3><p>Кнопка выше — файл <code class="mono">PlusLauncher-Setup.exe</code>, около 78 МБ.</p></div></li>
+      <li><span class="num mono">1</span><div><h3>Скачайте установщик</h3><p>Кнопка выше открывает страницу релизов на GitHub. Берите самый верхний и скачивайте файл <code class="mono">PlusLauncher-Setup-….exe</code>, около 78 МБ.</p></div></li>
       <li><span class="num mono">2</span><div><h3>Запустите его</h3><p>Windows покажет синее окно SmartScreen: «Подробнее» → «Выполнить в любом случае». Так бывает у программ без платной подписи разработчика.</p></div></li>
       <li><span class="num mono">3</span><div><h3>Выберите папку для игры</h3><p>При первом запуске лаунчер спросит, где хранить файлы. Можно оставить по умолчанию или указать другой диск.</p></div></li>
     </ol>
@@ -147,12 +147,13 @@
   <section id="faq" class="section">
     <h2>Вопросы</h2>
     <div class="faq">
-      <details><summary>Нужна ли лицензия Minecraft?</summary><p>Для входа по Microsoft — да, лаунчер проверяет покупку. Без лицензии можно создать оффлайн-профиль: одиночная игра и сервера, которые не требуют лицензию.</p></details>
+      <details><summary>Нужна ли лицензия Minecraft?</summary><p>Нет. Войти можно через Ely.by — бесплатный аккаунт со своими скинами и плащами — или создать оффлайн-профиль для одиночной игры и серверов, которые не требуют лицензию.</p></details>
       <details><summary>Нужно ли ставить Java?</summary><p>Нет. Лаунчер сам найдёт подходящую Java, а если её нет — скачает нужную версию с Adoptium.</p></details>
       <details><summary>Куда сохраняются моды и миры?</summary><p>В папку версии: например <code class="mono">1.21.4\mods</code> и <code class="mono">1.21.4\saves</code>. Папку лаунчера можно перенести на другой диск прямо из настроек, вместе со всем скачанным.</p></details>
       <details><summary>Почему антивирус или SmartScreen ругается?</summary><p>Установщик не подписан сертификатом — подпись платная. Windows предупреждает о любой неподписанной программе. Файлы всегда берите с этой страницы или из релизов на GitHub.</p></details>
       <details><summary>Как обновиться?</summary><p>Лаунчер сам сообщит о новой версии и предложит поставить её. Можно и просто скачать свежий установщик отсюда — настройки и скачанные версии останутся на месте.</p></details>
-      <details><summary>Можно ли играть на серверах?</summary><p>Да, как в обычном Minecraft. Лицензионные сервера требуют вход по Microsoft.</p></details>
+      <details><summary>Можно ли играть на серверах?</summary><p>Да, как в обычном Minecraft. Аккаунт Ely.by работает на серверах, которые его поддерживают, оффлайн-профиль — на серверах без проверки лицензии.</p></details>
+      <details><summary>Плохо качается или зависает установка версии?</summary><p>В настройках есть раздел «Соединение и зеркала»: лаунчер умеет брать те же файлы Mojang с зеркала, VPN для этого не нужен. Там же кнопка проверки — она показывает, какие серверы у вас открываются, а какие нет.</p></details>
     </div>
   </section>
 </main>

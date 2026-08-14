@@ -9,7 +9,11 @@ const API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const $ = (s) => document.querySelector(s);
 
 for (const el of [$('#nav-repo'), $('#foot-repo')]) el.href = `https://github.com/${REPO}`;
-$('#download').href = `${RELEASES}/latest`;
+
+// Кнопка ведёт на страницу релизов, а не на прямой .exe: там видны все версии
+// с описанием изменений, и ссылка не ломается, если в релизе переименован файл.
+$('#download').href = RELEASES;
+$('#download').target = '_blank';
 
 const fmtSize = (bytes) => {
   if (!bytes) return '';
@@ -23,7 +27,7 @@ const fmtDate = (iso) => {
   } catch { return ''; }
 };
 
-/** Подставляет прямую ссылку на .exe, версию, размер и дату последнего релиза */
+/** Показывает версию, размер и дату последнего релиза под кнопкой */
 async function loadRelease() {
   const meta = $('#release-meta');
   try {
@@ -32,17 +36,15 @@ async function loadRelease() {
     const rel = await res.json();
 
     const exe = (rel.assets || []).find((a) => /\.exe$/i.test(a.name));
-    if (exe) $('#download').href = exe.browser_download_url;
-
     const version = String(rel.tag_name || '').replace(/^v/, '');
     const parts = [];
     if (version) parts.push(`<b>версия ${version}</b>`);
     if (exe) parts.push(fmtSize(exe.size));
     if (rel.published_at) parts.push(fmtDate(rel.published_at));
-    meta.innerHTML = parts.join(' · ') || 'последняя версия';
+    meta.innerHTML = parts.join(' · ') || 'все версии на GitHub';
   } catch {
-    // приватный репозиторий или нет релизов — оставляем ссылку на страницу релизов
-    meta.innerHTML = `<a href="${RELEASES}">все версии на GitHub</a>`;
+    // нет релизов или GitHub не ответил — кнопка всё равно рабочая
+    meta.textContent = 'все версии на GitHub';
   }
 }
 
