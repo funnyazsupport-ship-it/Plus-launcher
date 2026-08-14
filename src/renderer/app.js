@@ -726,25 +726,37 @@ function renderWho() {
   $('#acc-avatar').src = AVATAR(a);
 }
 
-$('#ms-login').addEventListener('click', async () => {
-  const btn = $('#ms-login');
-  btn.disabled = true;
-  try {
-    await call(app.auth.login({ taskId: newTask() }));
-    state.cfg = await call(app.config.get());
-    $('#ms-code-box').hidden = true;
-    renderAccounts(); renderWho();
-    toast('Вход выполнен');
-  } catch {
-    $('#ms-code-box').hidden = true;
-  } finally { btn.disabled = false; }
-});
-$('#ms-cancel').addEventListener('click', () => { app.auth.cancel(); $('#ms-code-box').hidden = true; });
-$('#ms-copy').addEventListener('click', () => { navigator.clipboard.writeText($('#ms-code').textContent.trim()); toast('Код скопирован'); });
-$('#ms-open').addEventListener('click', () => {
-  const u = $('#ms-url').textContent.trim();
-  app.shell.open(u.startsWith('http') ? u : `https://${u}`);
-});
+/*
+ * Вход через Microsoft временно убран из интерфейса — панель закомментирована
+ * в index.html. Обработчики привязываются только если она есть в разметке,
+ * поэтому при возврате панели ничего дописывать не придётся.
+ * Сам вход в main-процессе работает: уже добавленные профили Microsoft
+ * запускают игру и продлевают сессию как раньше.
+ */
+function bindMicrosoftLogin() {
+  const start = $('#ms-login');
+  if (!start) return;
+
+  start.addEventListener('click', async () => {
+    start.disabled = true;
+    try {
+      await call(app.auth.login({ taskId: newTask() }));
+      state.cfg = await call(app.config.get());
+      $('#ms-code-box').hidden = true;
+      renderAccounts(); renderWho();
+      toast('Вход выполнен');
+    } catch {
+      $('#ms-code-box').hidden = true;
+    } finally { start.disabled = false; }
+  });
+  $('#ms-cancel').addEventListener('click', () => { app.auth.cancel(); $('#ms-code-box').hidden = true; });
+  $('#ms-copy').addEventListener('click', () => { navigator.clipboard.writeText($('#ms-code').textContent.trim()); toast('Код скопирован'); });
+  $('#ms-open').addEventListener('click', () => {
+    const u = $('#ms-url').textContent.trim();
+    app.shell.open(u.startsWith('http') ? u : `https://${u}`);
+  });
+}
+bindMicrosoftLogin();
 
 $('#off-add').addEventListener('click', async () => {
   const nick = $('#off-name').value.trim();
@@ -1298,6 +1310,8 @@ app.on('game:exit', ({ code }) => {
   toast(code === 0 ? 'Игра закрыта' : `Игра завершилась с кодом ${code}`, code === 0 ? '' : 'err');
 });
 app.on('auth:code', (dc) => {
+  // код придёт только если панель Microsoft возвращена в разметку
+  if (!$('#ms-code-box')) return;
   $('#ms-code-box').hidden = false;
   $('#ms-code').textContent = dc.userCode;
   $('#ms-url').textContent = dc.verificationUri;

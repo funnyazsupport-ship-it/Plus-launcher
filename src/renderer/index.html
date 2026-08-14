@@ -239,24 +239,32 @@
 
     <!-- АККАУНТ -->
     <section class="page" id="page-account">
-      <div class="head"><div><h1>Аккаунт</h1><p class="dim">Лицензия Microsoft или оффлайн-профиль</p></div></div>
+      <div class="head"><div><h1>Аккаунт</h1><p class="dim">Ely.by или оффлайн-профиль</p></div></div>
+
+      <!--
+        Вход через Microsoft временно убран из интерфейса: лаунчер пока работает
+        на client id официального лаунчера, своё приложение в Azure не заведено.
+        Весь код входа на месте (auth.js, обработчик auth:login, ветки microsoft
+        в скинах) — чтобы вернуть панель, достаточно раскомментировать этот блок
+        и обработчики #ms-* в app.js.
+
+      <div class="panel">
+        <div class="side-head"><span class="lbl">Лицензия Microsoft</span></div>
+        <p class="dim">Вход по коду устройства. Нужна купленная Minecraft: Java Edition.</p>
+        <div id="ms-code-box" class="codebox" hidden>
+          <div class="code mono" id="ms-code">------</div>
+          <p class="dim">Откройте <b class="mono" id="ms-url">microsoft.com/link</b> и введите код</p>
+          <div class="stack row">
+            <button class="btn" id="ms-copy">Скопировать</button>
+            <button class="btn" id="ms-open"><svg><use href="#i-link"/></svg>Открыть</button>
+            <button class="btn" id="ms-cancel">Отмена</button>
+          </div>
+        </div>
+        <button class="btn accent" id="ms-login">Войти через Microsoft</button>
+      </div>
+      -->
 
       <div class="two">
-        <div class="panel">
-          <div class="side-head"><span class="lbl">Лицензия Microsoft</span></div>
-          <p class="dim">Вход по коду устройства. Нужна купленная Minecraft: Java Edition.</p>
-          <div id="ms-code-box" class="codebox" hidden>
-            <div class="code mono" id="ms-code">------</div>
-            <p class="dim">Откройте <b class="mono" id="ms-url">microsoft.com/link</b> и введите код</p>
-            <div class="stack row">
-              <button class="btn" id="ms-copy">Скопировать</button>
-              <button class="btn" id="ms-open"><svg><use href="#i-link"/></svg>Открыть</button>
-              <button class="btn" id="ms-cancel">Отмена</button>
-            </div>
-          </div>
-          <button class="btn accent" id="ms-login">Войти через Microsoft</button>
-        </div>
-
         <div class="panel">
           <div class="side-head"><span class="lbl">Ely.by</span></div>
           <p class="dim">Бесплатные аккаунты со своими скинами и плащами. Работают на серверах, которые их поддерживают.</p>
@@ -270,13 +278,11 @@
           <p class="note" id="ely-note" hidden></p>
           <p class="dim">Нет аккаунта? <b class="lnk" id="ely-signup">Зарегистрироваться на ely.by</b></p>
         </div>
-      </div>
 
-      <div class="panel">
-        <div class="side-head"><span class="lbl">Оффлайн-профиль</span></div>
-        <p class="dim">Одиночная игра и сервера без лицензии. Скин можно поставить локально во вкладке «Скины».</p>
-        <div class="form-row">
-          <label class="f grow"><span class="lbl">Ник</span><input id="off-name" placeholder="Steve" maxlength="16" /></label>
+        <div class="panel">
+          <div class="side-head"><span class="lbl">Оффлайн-профиль</span></div>
+          <p class="dim">Одиночная игра и сервера без лицензии. Скин можно поставить локально во вкладке «Скины».</p>
+          <label class="f"><span class="lbl">Ник</span><input id="off-name" placeholder="Steve" maxlength="16" /></label>
           <button class="btn" id="off-add">Добавить</button>
         </div>
       </div>
