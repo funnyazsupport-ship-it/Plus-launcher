@@ -24,6 +24,9 @@ const DEFAULTS = {
   // Ключ CurseForge API хранится зашифрованным в curseforgeKeyEnc — открытым текстом его тут нет
   curseforgeKeyEnc: '',
   checkUpdatesOnStart: true,
+  // Зеркала для файлов игры: auto — официальный сервер, зеркало как запасной;
+  // mirror — сразу через зеркало; off — только официальные серверы.
+  mirrors: 'auto',
   // Разбор вылетов через DeepSeek: лог отправляется на сервис, поэтому это отключаемо
   aiCrashHelp: true,
   // Discord Rich Presence. Application ID, ключ картинки, адрес репозитория обновлений

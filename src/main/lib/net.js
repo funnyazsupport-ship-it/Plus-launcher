@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 const { Readable } = require('stream');
 
+const mirrors = require('./mirrors');
+
 const UA = 'PlusLauncher/1.0 (+https://github.com/plus-launcher)';
 
 // Без таймаутов зависшее соединение висит вечно: загрузка замирает на «N из M»
@@ -13,6 +15,27 @@ const UA = 'PlusLauncher/1.0 (+https://github.com/plus-launcher)';
 const CONNECT_MS = 25000;   // сервер не ответил
 const IDLE_MS = 30000;      // ответил, но данные перестали идти
 const host = (url) => { try { return new URL(url).host; } catch { return url; } };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Расписание попыток: сначала по одному заходу на каждый источник,
+ * потом повторы по кругу. Так недоступный Mojang стоит одного таймаута,
+ * а не всех попыток подряд.
+ */
+function plan(url, tries) {
+  const list = mirrors.candidates(url);
+  const out = [...list];
+  for (let i = list.length; i < tries; i++) out.push(list[i % list.length]);
+  return out;
+}
+
+/** Отвечать 403/404 будет и дальше — повторять по этому адресу смысла нет */
+const deadEnd = (e) => /HTTP (40[0-46]|41[0-5])/.test(String(e && e.message));
+
+/** Выбрасывает из очереди оставшиеся попытки по тому же адресу */
+function dropAll(queue, target) {
+  for (let i = queue.length - 1; i >= 0; i--) if (queue[i] === target) queue.splice(i, 1);
+}
 
 /** Понятная ошибка вместо «AbortError» */
 function netError(url, e, aborted) {
@@ -24,20 +47,28 @@ function netError(url, e, aborted) {
 }
 
 async function getJSON(url, headers = {}, tries = 3) {
+  const queue = plan(url, tries);
   let lastErr;
-  for (let i = 0; i < tries; i++) {
+  let attempt = 0;
+  while (queue.length) {
+    const target = queue.shift();
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), CONNECT_MS);
     try {
-      const res = await fetch(url, {
+      const res = await fetch(target, {
         headers: { 'User-Agent': UA, Accept: 'application/json', ...headers },
         signal: ac.signal,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} — ${url}`);
-      return await res.json();
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} — ${target}`);
+      const data = await res.json();
+      mirrors.worked(url, target);
+      return data;
     } catch (e) {
-      lastErr = netError(url, e, ac.signal.aborted);
-      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      lastErr = netError(target, e, ac.signal.aborted);
+      // 404 на зеркале — этого файла там нет и не появится, повторы выкидываем
+      if (deadEnd(e)) dropAll(queue, target);
+      else if (queue.length) await sleep(400 * (attempt + 1));
+      attempt += 1;
     } finally {
       clearTimeout(timer);
     }
@@ -94,15 +125,18 @@ async function download(url, dest, { sha1 = null, size = null, tries = 4, header
   }
   await fsp.mkdir(path.dirname(dest), { recursive: true });
   const tmp = dest + '.part';
+  const queue = plan(url, tries);
   let lastErr;
+  let attempt = 0;
 
-  for (let i = 0; i < tries; i++) {
+  while (queue.length) {
+    const target = queue.shift();
     const ac = new AbortController();
     // сначала ждём ответа сервера, дальше следим, чтобы данные не замолкали
     let timer = setTimeout(() => ac.abort(), CONNECT_MS);
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: ac.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
+      const res = await fetch(target, { headers: { 'User-Agent': UA, ...headers }, signal: ac.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status} — ${target}`);
 
       const body = Readable.fromWeb(res.body);
       const bump = () => {
@@ -115,17 +149,21 @@ async function download(url, dest, { sha1 = null, size = null, tries = 4, header
       await pipeline(body, fs.createWriteStream(tmp));
       clearTimeout(timer);
 
+      // sha1 из манифеста Mojang — заодно и защита от подменённого файла на зеркале
       if (sha1) {
         const got = await sha1File(tmp);
         if (got !== sha1) throw new Error(`файл ${path.basename(dest)} скачался повреждённым`);
       }
       await fsp.rename(tmp, dest);
+      mirrors.worked(url, target);
       return (await fsp.stat(dest)).size;
     } catch (e) {
       clearTimeout(timer);
-      lastErr = netError(url, e, ac.signal.aborted);
+      lastErr = netError(target, e, ac.signal.aborted);
       try { await fsp.unlink(tmp); } catch {}
-      if (i < tries - 1) await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+      if (deadEnd(e)) dropAll(queue, target);
+      else if (queue.length) await sleep(600 * (attempt + 1));
+      attempt += 1;
     }
   }
   throw lastErr;
@@ -145,4 +183,27 @@ async function pool(items, limit, worker) {
   return results;
 }
 
-module.exports = { getJSON, postJSON, download, sha1File, pool, exists, UA };
+/**
+ * Одиночная проверка «отвечает ли сервис». Любой HTTP-ответ считается успехом:
+ * 401 или 404 значат, что сервер доступен, а сеть до него доходит.
+ * Зеркала здесь не подставляются — проверяем именно указанный адрес.
+ */
+async function ping(url, { headers = {}, timeout = 8000 } = {}) {
+  const started = Date.now();
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeout);
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: ac.signal });
+    return { ok: true, status: res.status, ms: Date.now() - started };
+  } catch (e) {
+    return {
+      ok: false,
+      ms: Date.now() - started,
+      error: ac.signal.aborted ? 'нет ответа (таймаут)' : netError(url, e, false).message,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+module.exports = { getJSON, postJSON, download, sha1File, pool, exists, ping, UA };

@@ -18,6 +18,8 @@ const storage = require('./lib/storage');
 const updater = require('./lib/updater');
 const discord = require('./lib/discord');
 const ai = require('./lib/ai');
+const mirrors = require('./lib/mirrors');
+const connectivity = require('./lib/connectivity');
 const appConfig = require('./lib/app-config');
 const { launch } = require('./lib/launch');
 
@@ -236,6 +238,16 @@ async function applyDiscord() {
 handle('discord:status', () => discord.status());
 handle('discord:apply', () => applyDiscord());
 handle('discord:select', (inst) => { presence.instance = inst; refreshPresence(); return true; });
+
+// ---------- соединение и зеркала ----------
+handle('net:check', () => connectivity.check());
+handle('net:mirrors', () => mirrors.stats());
+// смена режима зеркал сбрасывает память о том, что работало
+handle('net:setMode', (mode) => {
+  config.save({ mirrors: ['auto', 'mirror', 'off'].includes(mode) ? mode : 'auto' });
+  mirrors.reset();
+  return config.load().mirrors;
+});
 
 // ---------- обновления лаунчера ----------
 handle('update:check', () => updater.check());

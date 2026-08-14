@@ -28,22 +28,44 @@ function typingBubble() {
   return bubble('assistant', dots);
 }
 
-/** Что сейчас в лаунчере — помощник отвечает с учётом выбранной сборки */
+/**
+ * Что сейчас в лаунчере. Чем точнее контекст, тем меньше помощник
+ * переспрашивает версию и тем реже советует моды не под тот загрузчик.
+ */
 async function launcherContext() {
+  const data = async (p, fallback) => { try { const r = await p; return r.ok ? r.data : fallback; } catch { return fallback; } };
   try {
-    const cfg = (await app.config.get()).data;
-    const instances = (await app.instances.list()).data || [];
-    const last = instances.find((i) => i.id === cfg.lastInstance) || instances[0];
-    if (!last) return 'Сборок пока нет.';
-    const mods = (await app.mods.installed(last.id, 'mod')).data || [];
+    const cfg = await data(app.config.get(), {});
+    const instances = await data(app.instances.list(), []);
+    if (!instances.length) return 'Сборок пока нет — их создают во вкладке «Версии».';
+
+    const cur = instances.find((i) => i.id === cfg.lastInstance) || instances[0];
+    const [mods, packs, shaders] = await Promise.all([
+      data(app.mods.installed(cur.id, 'mod'), []),
+      data(app.mods.installed(cur.id, 'resourcepack'), []),
+      data(app.mods.installed(cur.id, 'shader'), []),
+    ]);
+    const on = mods.filter((m) => m.enabled).map((m) => m.file.replace(/\.jar$/i, ''));
+    const off = mods.filter((m) => !m.enabled).map((m) => m.file.replace(/\.jar\.disabled$/i, ''));
+
     return [
-      `Выбранная сборка: ${last.name} — Minecraft ${last.mc}, загрузчик ${last.loader}, папка ${last.folder}.`,
-      `Память: ${cfg.minRam}–${cfg.maxRam} МБ. Аргументы JVM: ${cfg.jvmArgs || 'нет'}.`,
-      mods.length ? `Моды (${mods.length}): ${mods.slice(0, 30).map((m) => m.file).join(', ')}` : 'Моды не установлены.',
-      `Всего сборок: ${instances.length}.`,
-    ].join('\n');
+      `Текущая сборка: «${cur.name}» — Minecraft ${cur.mc}, загрузчик ${cur.loader === 'vanilla' ? 'без модов (ваниль)' : cur.loader}${cur.loaderVersion ? ` ${cur.loaderVersion}` : ''}.`,
+      `Память: ${cfg.minRam}–${cfg.maxRam} МБ. Java: ${cfg.javaPath || 'выбирается автоматически'}. Аргументы JVM: ${cfg.jvmArgs || 'по умолчанию'}.`,
+      on.length ? `Включённые моды (${on.length}): ${on.slice(0, 60).join(', ')}` : 'Моды не установлены.',
+      off.length ? `Выключенные моды (${off.length}): ${off.slice(0, 20).join(', ')}` : '',
+      packs.length ? `Ресурспаков: ${packs.length}. ` : '',
+      shaders.length ? `Шейдеров: ${shaders.length}.` : '',
+      instances.length > 1
+        ? `Другие сборки: ${instances.filter((i) => i.id !== cur.id).map((i) => `${i.name} (${i.mc}, ${i.loader})`).slice(0, 8).join('; ')}`
+        : '',
+      `Разрешение окна игры: ${cfg.width}x${cfg.height}${cfg.fullscreen ? ', полноэкранный' : ''}.`,
+    ].filter(Boolean).join('\n');
   } catch { return ''; }
 }
+
+// вопрос про последний вылет отдаём разбору — только он видит лог и crash-report
+const ABOUT_CRASH = /(вылет|краш|crash|упал|вылет|закрыл[аи]сь|не запускается|не стартует|ошибк|error)/i;
+const ABOUT_MINE = /(последн|мо[йяе]|у меня|разбер|почему|что не так|помоги)/i;
 
 async function send(text) {
   const q = String(text || $('#input').value).trim();
@@ -59,7 +81,7 @@ async function send(text) {
 
   try {
     // просьбу разобрать вылет отдаём отдельному разбору — он видит лог игры
-    if (/вылет|краш|упала|closed with|ошибк/i.test(q) && /последн|мой|разбер/i.test(q)) {
+    if (ABOUT_CRASH.test(q) && ABOUT_MINE.test(q)) {
       const r = await app.ai.explain();
       if (r.ok) {
         placeholder.textContent = r.data.text;

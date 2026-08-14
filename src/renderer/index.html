@@ -331,6 +331,25 @@
       </div>
 
       <div class="panel">
+        <div class="side-head">
+          <span class="lbl">Соединение и зеркала</span>
+          <span class="count mono" id="net-state">не проверено</span>
+        </div>
+        <p class="dim">Официальные серверы Mojang из России часто отвечают рывками, и установка версии зависает. Лаунчер умеет качать те же файлы с зеркала — VPN для этого не нужен. Все файлы игры проверяются по контрольной сумме Mojang, так что подменить их зеркало не может.</p>
+        <div class="seg" id="s-mirrors">
+          <button data-mode="auto" class="on">Автоматически</button>
+          <button data-mode="mirror">Всегда зеркало</button>
+          <button data-mode="off">Только Mojang</button>
+        </div>
+        <p class="dim" id="mirror-hint">Сначала пробуем Mojang, при сбое сразу переключаемся на зеркало.</p>
+        <div class="form-row">
+          <button class="btn" id="net-check"><svg><use href="#i-refresh"/></svg>Проверить соединение</button>
+        </div>
+        <div id="net-list" class="net-list"></div>
+        <div id="net-advice"></div>
+      </div>
+
+      <div class="panel">
         <div class="side-head"><span class="lbl">Папка лаунчера</span><span class="count mono" id="st-size">—</span></div>
         <p class="dim">Здесь лежат версии, библиотеки, ресурсы, Java и папки версий с модами и мирами. Их можно держать на другом диске.</p>
         <div class="form-row">

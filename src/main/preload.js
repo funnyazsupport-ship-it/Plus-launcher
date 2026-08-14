@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('api', {
     apply: () => invoke('discord:apply'),
     select: (inst) => invoke('discord:select', inst),
   },
+  net: {
+    check: () => invoke('net:check'),
+    mirrors: () => invoke('net:mirrors'),
+    setMode: (mode) => invoke('net:setMode', mode),
+  },
   update: {
     check: () => invoke('update:check'),
     download: (opts) => invoke('update:download', opts),

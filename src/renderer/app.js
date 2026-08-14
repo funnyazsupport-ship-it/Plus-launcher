@@ -804,8 +804,75 @@ function bindSettings() {
   $('#s-check-update').addEventListener('click', () => checkUpdate(false));
   app.update.version().then((r) => { if (r.ok) $('#app-version').textContent = `v${r.data}`; });
 
+  initMirrors(cfg.mirrors || 'auto');
   loadStorage();
 }
+
+// ---------------- соединение и зеркала ----------------
+
+const MIRROR_HINT = {
+  auto: 'Сначала пробуем Mojang, при сбое сразу переключаемся на зеркало. Подходит почти всем.',
+  mirror: 'Все файлы игры качаются с зеркала. Ставьте, если Mojang у вашего провайдера не открывается совсем.',
+  off: 'Только официальные серверы Mojang. Если они недоступны, установка версии не пройдёт.',
+};
+
+function initMirrors(mode) {
+  const seg = $('#s-mirrors');
+  const paint = (m) => {
+    seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+    $('#mirror-hint').textContent = MIRROR_HINT[m] || MIRROR_HINT.auto;
+  };
+  paint(mode);
+  seg.querySelectorAll('button').forEach((b) => b.addEventListener('click', async () => {
+    const m = b.dataset.mode;
+    paint(m);
+    await call(app.net.setMode(m));
+    state.cfg = await call(app.config.get());
+    toast('Режим загрузки сохранён');
+  }));
+}
+
+const NEED_LABEL = { game: 'нужно для игры', login: 'нужно для лицензии', extra: 'дополнительно' };
+
+$('#net-check').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const list = $('#net-list');
+  btn.disabled = true;
+  $('#net-state').textContent = 'проверяю…';
+  list.innerHTML = '<div class="note-center"><span class="spin"></span> проверяю доступность серверов…</div>';
+  $('#net-advice').innerHTML = '';
+  try {
+    const r = await call(app.net.check());
+    list.innerHTML = '';
+    for (const s of r.items) {
+      const row = document.createElement('div');
+      // зелёный — открыт напрямую, жёлтый — работает через зеркало, красный — недоступен
+      const kind = s.viaMirror ? 'warn' : (s.ok ? 'good' : 'bad');
+      row.className = `net-row ${kind}`;
+      row.innerHTML = `<span class="dot"></span><span class="nm"></span><span class="mono st"></span>`;
+      row.querySelector('.nm').textContent = s.name;
+      row.querySelector('.st').textContent = s.viaMirror
+        ? `через зеркало · ${s.mirror.ms} мс`
+        : (s.ok ? `${s.direct.ms} мс` : (s.direct.error || 'недоступен'));
+      row.title = NEED_LABEL[s.need] || '';
+      list.appendChild(row);
+    }
+    const box = $('#net-advice');
+    box.innerHTML = '';
+    for (const a of r.advice) {
+      const p = document.createElement('p');
+      p.className = `note ${r.verdict === 'bad' ? 'err' : r.verdict === 'warn' ? 'warn' : 'ok'}`;
+      p.textContent = a;
+      box.appendChild(p);
+    }
+    $('#net-state').textContent = { good: 'всё работает', warn: 'работает через зеркало', bad: 'есть проблемы' }[r.verdict];
+  } catch {
+    list.innerHTML = '<div class="note-center">не удалось выполнить проверку</div>';
+    $('#net-state').textContent = 'ошибка';
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ---------------- разбор вылетов ----------------
 
