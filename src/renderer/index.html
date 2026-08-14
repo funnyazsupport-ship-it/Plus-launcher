@@ -322,6 +322,9 @@
           <button class="btn" id="s-check-update"><svg><use href="#i-refresh"/></svg>Проверить сейчас</button>
         </div>
         <label class="check"><input type="checkbox" id="s-autocheck" /><span>Проверять обновления при запуске</span></label>
+        <div class="divider"></div>
+        <label class="check"><input type="checkbox" id="s-ai" /><span>Разбирать вылеты игры через ИИ</span></label>
+        <p class="dim">Если игра закрылась с ошибкой, лаунчер отправляет её лог в DeepSeek и показывает, в чём причина. Имя пользователя Windows из лога вырезается.</p>
         <p class="note" id="update-note" hidden></p>
       </div>
 
@@ -367,6 +370,25 @@
 </footer>
 
 <div class="toasts" id="toasts"></div>
+
+<!-- разбор вылета игры -->
+<div class="modal" id="crash" hidden>
+  <div class="modal-box crash-box">
+    <div class="modal-top">
+      <h3 id="crash-title">Игра закрылась с ошибкой</h3>
+      <button class="ico-btn" id="crash-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="crash-text" id="crash-text"></div>
+      <p class="dim crash-src mono" id="crash-src"></p>
+      <div class="stack row">
+        <button class="btn" id="crash-log"><svg><use href="#i-terminal"/></svg>Открыть консоль</button>
+        <button class="btn" id="crash-retry"><svg><use href="#i-refresh"/></svg>Разобрать заново</button>
+        <button class="btn" id="crash-copy">Скопировать</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- универсальный вопрос с кнопками -->
 <div class="modal" id="ask" hidden>

@@ -795,11 +795,52 @@ function bindSettings() {
 
   $('#s-autocheck').checked = cfg.checkUpdatesOnStart !== false;
   $('#s-autocheck').addEventListener('change', (e) => save({ checkUpdatesOnStart: e.target.checked }));
+  $('#s-ai').checked = cfg.aiCrashHelp !== false;
+  $('#s-ai').addEventListener('change', (e) => save({ aiCrashHelp: e.target.checked }));
   $('#s-check-update').addEventListener('click', () => checkUpdate(false));
   app.update.version().then((r) => { if (r.ok) $('#app-version').textContent = `v${r.data}`; });
 
   loadStorage();
 }
+
+// ---------------- разбор вылетов ----------------
+
+function showCrash({ code, analyzing, text, error, source }) {
+  const box = $('#crash');
+  const body = $('#crash-text');
+  $('#crash-title').textContent = `Игра закрылась с ошибкой (код ${code})`;
+  $('#crash-retry').disabled = Boolean(analyzing);
+
+  if (analyzing) {
+    body.innerHTML = '<span class="spin"></span> Разбираю, что случилось…';
+    $('#crash-src').textContent = '';
+  } else if (text) {
+    body.textContent = text;
+    $('#crash-src').textContent = source ? `разбор по: ${source}` : '';
+  } else {
+    body.textContent = `Не удалось разобрать ошибку: ${error || 'нет ответа'}.\n\nОткройте консоль — там полный вывод игры.`;
+    $('#crash-src').textContent = '';
+  }
+  box.hidden = false;
+}
+
+$('#crash-close').addEventListener('click', () => { $('#crash').hidden = true; });
+$('#crash').addEventListener('click', (e) => { if (e.target.id === 'crash') $('#crash').hidden = true; });
+$('#crash-log').addEventListener('click', () => { $('#crash').hidden = true; go('console'); });
+$('#crash-copy').addEventListener('click', () => {
+  navigator.clipboard.writeText($('#crash-text').textContent.trim());
+  toast('Скопировано');
+});
+$('#crash-retry').addEventListener('click', async (e) => {
+  e.currentTarget.disabled = true;
+  showCrash({ code: '—', analyzing: true });
+  try {
+    const r = await call(app.ai.explain());
+    showCrash({ code: '—', analyzing: false, text: r.text, source: r.source });
+  } catch (err) {
+    showCrash({ code: '—', analyzing: false, error: err.message });
+  }
+});
 
 // ---------------- статус в Discord ----------------
 
@@ -1064,6 +1105,7 @@ $('#btn-play').addEventListener('click', async () => {
 
 app.on('progress', (p) => setProgress(p.percent, p.detail ? `${p.stage} — ${p.detail}` : p.stage));
 app.on('discord:status', (st) => renderDiscord(st));
+app.on('game:crash', (info) => showCrash(info));
 app.on('game:log', (line) => logLine(line));
 app.on('game:exit', ({ code }) => {
   const btn = $('#btn-play');

@@ -82,13 +82,17 @@ contextBridge.exposeInMainWorld('api', {
     applyLocal: (opts) => invoke('skins:applyLocal', opts),
     installMod: (opts) => invoke('skins:installMod', opts),
   },
+  ai: {
+    available: () => invoke('ai:available'),
+    explain: () => invoke('ai:explain'),
+  },
   game: {
     launch: (opts) => invoke('game:launch', opts),
     kill: () => invoke('game:kill'),
     running: () => invoke('game:running'),
   },
   on: (channel, cb) => {
-    const allowed = ['progress', 'auth:code', 'game:log', 'game:exit', 'discord:status'];
+    const allowed = ['progress', 'auth:code', 'game:log', 'game:exit', 'game:crash', 'discord:status'];
     if (!allowed.includes(channel)) return () => {};
     const listener = (_e, payload) => cb(payload);
     ipcRenderer.on(channel, listener);

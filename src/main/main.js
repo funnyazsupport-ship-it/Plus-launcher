@@ -17,6 +17,7 @@ const skins = require('./lib/skins');
 const storage = require('./lib/storage');
 const updater = require('./lib/updater');
 const discord = require('./lib/discord');
+const ai = require('./lib/ai');
 const appConfig = require('./lib/app-config');
 const { launch } = require('./lib/launch');
 
@@ -448,6 +449,51 @@ handle('skins:applyLocal', async ({ instanceId, file, variant }) => {
 
 handle('skins:installMod', ({ taskId, instanceId }) => skins.installLoaderMod(instanceId, progress(taskId)));
 
+// ---------- разбор вылетов ----------
+
+const LOG_LINES = 600;
+const gameLog = [];
+let lastRun = null;          // сборка и папка последнего запуска — нужны для разбора
+
+async function enabledMods(instanceId) {
+  const list = await mods.listInstalled(instanceId, 'mod').catch(() => []);
+  return list.filter((m) => m.enabled).map((m) => m.file);
+}
+
+/**
+ * Игра закрылась с ошибкой: собираем лог и просим DeepSeek объяснить причину.
+ * Отправку можно выключить галочкой в настройках.
+ */
+async function explainLastCrash(exitCode) {
+  if (config.load().aiCrashHelp === false || !ai.available() || !lastRun) return;
+
+  send('game:crash', { code: exitCode, analyzing: true });
+  try {
+    const r = await ai.explainCrash({
+      log: gameLog.join(''),
+      gameDir: lastRun.dir,
+      instance: lastRun.inst,
+      exitCode,
+      mods: await enabledMods(lastRun.inst.id),
+    });
+    send('game:crash', { code: exitCode, analyzing: false, text: r.text, source: r.source });
+  } catch (e) {
+    send('game:crash', { code: exitCode, analyzing: false, error: e.message });
+  }
+}
+
+handle('ai:available', () => ai.available());
+handle('ai:explain', async () => {
+  if (!lastRun) throw new Error('Нет данных о последнем запуске игры');
+  return ai.explainCrash({
+    log: gameLog.join(''),
+    gameDir: lastRun.dir,
+    instance: lastRun.inst,
+    exitCode: 1,
+    mods: await enabledMods(lastRun.inst.id),
+  });
+});
+
 // ---------- запуск ----------
 handle('game:launch', async ({ taskId, instanceId }) => {
   if (gameProcess) throw new Error('Игра уже запущена');
@@ -461,11 +507,18 @@ handle('game:launch', async ({ taskId, instanceId }) => {
   await versions.install(inst.versionId, (x) => p({ ...x, percent: Math.round(x.percent * 0.28) }));
 
   const dir = gameDir(inst.folder || inst.mc || inst.id);
+  gameLog.length = 0;
+  lastRun = { inst, dir, killedByUser: false };
+
   gameProcess = await launch({
     versionId: inst.versionId, account, config: cfg, gameDir: dir,
   }, (type, payload) => {
-    if (type === 'log') send('game:log', String(payload));
-    else if (type === 'progress') p(payload);
+    if (type === 'log') {
+      const line = String(payload);
+      gameLog.push(line);
+      if (gameLog.length > LOG_LINES) gameLog.splice(0, gameLog.length - LOG_LINES);
+      send('game:log', line);
+    } else if (type === 'progress') p(payload);
     else if (type === 'exit') {
       gameProcess = null;
       send('game:exit', payload);
@@ -473,6 +526,8 @@ handle('game:launch', async ({ taskId, instanceId }) => {
       presence.gameSince = null;
       refreshPresence();
       if (win && !win.isDestroyed()) win.show();
+      // код 0 — игру закрыли обычным способом; ненулевой означает вылет
+      if (payload.code && !lastRun?.killedByUser) explainLastCrash(payload.code);
     }
   });
 
@@ -493,6 +548,7 @@ handle('game:kill', async () => {
   if (!gameProcess) return false;
   const child = gameProcess;
   const pid = child.pid;
+  if (lastRun) lastRun.killedByUser = true;      // остановку из лаунчера разбирать не нужно
 
   // Игра запускает второй java-процесс, поэтому снимаем всё дерево целиком:
   // убить только своего потомка мало — игра останется висеть в памяти.

@@ -328,6 +328,14 @@ input[type=range]::-webkit-slider-thumb {
 .ver-row b { font-size: 12.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ver-row small { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
 
+.crash-box { width: min(620px, 94vw); border-left: 3px solid var(--danger); }
+.crash-text {
+  font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; margin-bottom: 12px;
+  max-height: 46vh; overflow-y: auto; user-select: text;
+}
+.crash-text b { color: var(--accent); }
+.crash-src { font-size: 11px; margin-bottom: 12px; }
+
 .ask-box { width: min(480px, 92vw); }
 .ask-text { font-size: 12.5px; color: var(--dim); white-space: pre-line; margin-bottom: 14px; }
 .ask-text b { color: var(--text); font-family: var(--mono); font-weight: 500; word-break: break-all; }

@@ -24,6 +24,8 @@ const DEFAULTS = {
   // Ключ CurseForge API хранится зашифрованным в curseforgeKeyEnc — открытым текстом его тут нет
   curseforgeKeyEnc: '',
   checkUpdatesOnStart: true,
+  // Разбор вылетов через DeepSeek: лог отправляется на сервис, поэтому это отключаемо
+  aiCrashHelp: true,
   // Discord Rich Presence. Application ID, ключ картинки, адрес репозитория обновлений
   // и client id Microsoft лежат в app-config.js — это настройки разработчика.
   discordEnabled: true,
