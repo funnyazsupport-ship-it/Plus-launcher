@@ -300,6 +300,22 @@ input[type=range]::-webkit-slider-thumb {
 .note.err { color: var(--danger); border-left-color: var(--danger); }
 #net-advice { display: flex; flex-direction: column; gap: 7px; }
 
+/* резервные копии: два списка рядом */
+.two-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+.two-lists .side-list { max-height: 168px; overflow-y: auto; margin-top: 6px; }
+.two-lists .side-item span { font-size: 11.5px; }
+#inst-cfg .modal-body { max-height: 78vh; overflow-y: auto; }
+@media (max-width: 720px) { .two-lists { grid-template-columns: 1fr; } }
+
+/* обновления модов */
+.btn.sm.full { margin: 8px 0 10px; }
+.upd-row { align-items: center; }
+.upd-row .check { margin: 0 2px 0 0; }
+.upd-row .row-desc { font-size: 11.5px; color: var(--accent); }
+#upd-list { max-height: 44vh; overflow-y: auto; margin-top: 10px; }
+#upd-unknown { margin: 8px 0 10px; line-height: 1.45; }
+#upd .form-row.right { align-items: center; gap: 14px; margin-top: 12px; }
+
 /* проверка соединения */
 .net-list { display: flex; flex-direction: column; gap: 1px; }
 .net-row { display: flex; align-items: center; gap: 9px; padding: 5px 2px; font-size: 12px; border-bottom: 1px solid var(--line); }

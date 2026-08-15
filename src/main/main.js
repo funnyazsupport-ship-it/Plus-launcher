@@ -14,6 +14,8 @@ const javaLib = require('./lib/java');
 const auth = require('./lib/auth');
 const ely = require('./lib/ely');
 const mods = require('./lib/mods');
+const modUpdates = require('./lib/mod-updates');
+const backups = require('./lib/backups');
 const skins = require('./lib/skins');
 const storage = require('./lib/storage');
 const updater = require('./lib/updater');
@@ -433,6 +435,19 @@ handle('instances:delete', async (id, withFiles) => {
   return true;
 });
 
+// ---------- резервные копии миров ----------
+handle('backups:worlds', (id) => backups.worlds(id));
+handle('backups:list', (id) => backups.list(id));
+handle('backups:create', ({ taskId, id, world, keep }) => backups.create(id, world, { keep }, progress(taskId)));
+handle('backups:all', ({ taskId, id, keep }) => backups.backupAll(id, { keep }, progress(taskId)));
+handle('backups:restore', ({ taskId, id, file }) => backups.restore(id, file, progress(taskId)));
+handle('backups:remove', (id, file) => backups.remove(id, file));
+handle('backups:folder', (id) => {
+  const dir = backups.folder(id);
+  fs.mkdirSync(dir, { recursive: true });
+  return shell.openPath(dir);
+});
+
 handle('instances:folder', (id) => {
   const inst = config.load().instances.find((i) => i.id === id);
   if (!inst) return null;
@@ -450,6 +465,9 @@ handle('mods:installed', (instance, kind) => mods.listInstalled(instance, kind))
 handle('mods:toggle', (instance, file, kind) => mods.toggle(instance, file, kind));
 handle('mods:remove', (instance, file, kind) => mods.remove(instance, file, kind));
 handle('mods:folder', (instance, kind) => shell.openPath(mods.targetFolder(instance, kind)));
+handle('mods:updates', ({ taskId, instance, kind, unstable }) =>
+  modUpdates.check(instance, kind, progress(taskId), { unstable: Boolean(unstable) }));
+handle('mods:applyUpdates', ({ taskId, instance, kind, items }) => modUpdates.apply(instance, items, kind, progress(taskId)));
 handle('mods:checkApi', (instanceId) => mods.missingLoaderApi(instanceId));
 handle('mods:installApi', ({ taskId, instanceId }) => mods.installLoaderApi(instanceId, progress(taskId)));
 
@@ -583,6 +601,17 @@ handle('game:launch', async ({ taskId, instanceId }) => {
   const account = await activeAccount();
 
   const p = progress(taskId);
+
+  // Копия миров до запуска: если игра или мод испортят сохранение, будет откуда вернуть.
+  if (cfg.backupBeforePlay) {
+    const r = await backups.backupAll(inst.id, { keep: cfg.backupKeep || 5 },
+      (x) => p({ ...x, percent: Math.round(x.percent * 0.05) })).catch((e) => {
+      console.warn('[backup]', e.message);
+      return null;
+    });
+    if (r?.done) send('game:log', `[launcher] сделаны копии миров: ${r.done} из ${r.total}\n`);
+  }
+
   p({ stage: 'Проверка файлов игры', percent: 5 });
   await versions.install(inst.versionId, (x) => p({ ...x, percent: Math.round(x.percent * 0.28) }));
 
@@ -590,8 +619,9 @@ handle('game:launch', async ({ taskId, instanceId }) => {
   gameLog.length = 0;
   lastRun = { inst, dir, killedByUser: false };
 
+  // память, Java и JVM-аргументы у сборки могут быть свои — они перекрывают общие
   gameProcess = await launch({
-    versionId: inst.versionId, account, config: cfg, gameDir: dir,
+    versionId: inst.versionId, account, config: config.effectiveFor(inst), gameDir: dir,
   }, (type, payload) => {
     if (type === 'log') {
       const line = String(payload);

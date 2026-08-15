@@ -181,6 +181,7 @@
             <span class="count mono" id="inst-count">0</span>
           </div>
           <div class="mono dim path" id="mods-path">—</div>
+          <button class="btn sm full" id="mods-check-upd"><svg><use href="#i-refresh"/></svg>Проверить обновления</button>
           <div id="installed-mods" class="side-list"></div>
         </aside>
       </div>
@@ -339,6 +340,10 @@
         <label class="check"><input type="checkbox" id="s-fullscreen" /><span>Полноэкранный режим</span></label>
         <label class="check"><input type="checkbox" id="s-close" /><span>Сворачивать лаунчер при запуске игры</span></label>
         <label class="f"><span class="lbl">JVM-аргументы</span><input id="s-jvm" class="mono" /></label>
+        <div class="divider"></div>
+        <label class="check"><input type="checkbox" id="s-backup" /><span>Копировать миры перед запуском игры</span></label>
+        <p class="dim">Копии лежат в папке backups и переживают удаление сборки. Восстановить мир можно в настройках сборки.</p>
+        <label class="f"><span class="lbl">Сколько копий каждого мира хранить</span><input type="number" id="s-backup-keep" min="1" max="30" class="mono" /></label>
       </div>
 
       <div class="panel">
@@ -456,6 +461,88 @@
     <div class="modal-body">
       <p id="ask-text" class="ask-text"></p>
       <div class="ask-actions" id="ask-actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- обновления модов -->
+<div class="modal" id="upd" hidden>
+  <div class="modal-box">
+    <div class="modal-top">
+      <h3 id="upd-title">Обновления модов</h3>
+      <button class="ico-btn" id="upd-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p class="dim" id="upd-sum">—</p>
+      <p class="note" id="upd-unknown" hidden></p>
+      <label class="check"><input type="checkbox" id="upd-unstable" /><span>Показывать beta и alpha</span></label>
+      <div class="rows" id="upd-list"></div>
+      <div class="form-row right">
+        <label class="check"><input type="checkbox" id="upd-all" checked /><span>Выбрать все</span></label>
+        <button class="btn accent" id="upd-apply">Обновить выбранные</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- настройки отдельной сборки -->
+<div class="modal" id="inst-cfg" hidden>
+  <div class="modal-box">
+    <div class="modal-top">
+      <h3>Настройки сборки</h3>
+      <button class="ico-btn" id="ic-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="f grow"><span class="lbl">Название</span><input id="ic-name" /></label>
+        <div class="f"><span class="lbl">Цвет</span><div class="swatches" id="ic-colors"></div></div>
+      </div>
+      <p class="dim mono" id="ic-about">—</p>
+
+      <div class="divider"></div>
+      <div class="side-head">
+        <span class="lbl">Память и Java</span>
+        <span class="count mono" id="ic-state">как в лаунчере</span>
+      </div>
+      <p class="dim">Тяжёлому модпаку нужно больше памяти, а старым версиям — Java 8. Здесь это задаётся для одной сборки, не трогая остальные.</p>
+      <div class="seg" id="ic-mode">
+        <button data-mode="inherit" class="on">Как в лаунчере</button>
+        <button data-mode="own">Свои настройки</button>
+      </div>
+
+      <div id="ic-own" hidden>
+        <div class="side-head"><span class="lbl">Максимум памяти</span><span class="count mono" id="ic-ram-label">4096 МБ</span></div>
+        <input type="range" id="ic-maxram" min="1024" max="32768" step="512" />
+        <div class="form-row">
+          <label class="f"><span class="lbl">Минимум (Xms), МБ</span><input type="number" id="ic-minram" min="256" step="256" class="mono" /></label>
+          <label class="f grow"><span class="lbl">Путь к Java</span><input id="ic-java" class="mono" placeholder="пусто — как в лаунчере" /></label>
+          <button class="btn" id="ic-java-browse">Обзор</button>
+        </div>
+        <label class="f"><span class="lbl">JVM-аргументы</span><input id="ic-jvm" class="mono" placeholder="пусто — как в лаунчере" /></label>
+      </div>
+
+      <div class="divider"></div>
+      <div class="side-head">
+        <span class="lbl">Резервные копии миров</span>
+        <button class="btn sm" id="ic-bk-folder"><svg><use href="#i-folder"/></svg>Папка копий</button>
+      </div>
+      <p class="dim">Копия — это zip с папкой мира. При восстановлении текущий мир не стирается, а откладывается рядом.</p>
+
+      <div class="two-lists">
+        <div>
+          <span class="lbl">Миры сборки</span>
+          <div class="side-list" id="ic-worlds"></div>
+        </div>
+        <div>
+          <span class="lbl">Готовые копии</span>
+          <div class="side-list" id="ic-backups"></div>
+        </div>
+      </div>
+
+      <div class="form-row right">
+        <button class="btn" id="ic-cancel">Отмена</button>
+        <button class="btn accent" id="ic-save">Сохранить</button>
+      </div>
     </div>
   </div>
 </div>

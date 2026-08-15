@@ -82,8 +82,10 @@ function fmtSize(bytes) {
  */
 function ask({ title, text, actions }) {
   return new Promise((resolve) => {
-    $('#ask-title').textContent = title;
-    $('#ask-text').innerHTML = String(text)
+    // Переводим до разбиения на <b>: иначе строка распадётся на куски,
+    // и обходчик разметки уже не узнает её целиком.
+    $('#ask-title').textContent = i18n.t(title);
+    $('#ask-text').innerHTML = i18n.t(String(text))
       .replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
       .replace(/\{([^}]*)\}/g, '<b>$1</b>');
     const box = $('#ask-actions');
@@ -136,8 +138,10 @@ function renderInstances() {
     const el = document.createElement('div');
     el.className = `card${state.selected === inst.id ? ' on' : ''}`;
     el.style.setProperty('--c', inst.color || COLORS[0]);
+    const own = OWN_KEYS.filter((k) => inst[k]);
     el.innerHTML = `
       <div class="card-acts">
+        <button class="cfg" title="Настройки сборки">${icon('sliders')}</button>
         <button class="fld" title="Папка версии">${icon('folder')}</button>
         <button class="del" title="Удалить">${icon('trash')}</button>
       </div>
@@ -149,10 +153,14 @@ function renderInstances() {
           ${inst.loader && inst.loader !== 'vanilla' ? `<span class="ld">${inst.loader}</span>` : ''}
           <span>${timeAgo(inst.lastPlayed)}</span>
         </div>
-        <div class="card-meta"><span>${inst.folder || inst.mc}\\</span></div>
+        <div class="card-meta">
+          <span>${inst.folder || inst.mc}\\</span>
+          ${own.length ? `<span class="ld">${inst.maxRam ? `${Math.round(inst.maxRam / 1024)} ГБ` : 'свои настройки'}</span>` : ''}
+        </div>
       </div>`;
     el.querySelector('.card-name').textContent = inst.name;
     el.addEventListener('click', () => selectInstance(inst.id));
+    el.querySelector('.cfg').addEventListener('click', (e) => { e.stopPropagation(); openInstanceConfig(inst); });
     el.querySelector('.fld').addEventListener('click', (e) => { e.stopPropagation(); app.instances.folder(inst.id); });
     el.querySelector('.del').addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -167,6 +175,165 @@ function renderInstances() {
     box.appendChild(el);
   }
 }
+
+// ---------------- настройки отдельной сборки ----------------
+
+// Пустое значение здесь означает «брать из общих настроек лаунчера»
+const OWN_KEYS = ['minRam', 'maxRam', 'javaPath', 'jvmArgs'];
+
+let editing = null;          // сборка, открытая в модалке
+let editColor = COLORS[0];
+
+function paintOwnMode(own) {
+  $('#ic-own').hidden = !own;
+  $('#ic-mode').querySelectorAll('button').forEach((b) => b.classList.toggle('on', (b.dataset.mode === 'own') === own));
+  $('#ic-state').textContent = own ? 'свои настройки' : 'как в лаунчере';
+}
+
+function openInstanceConfig(inst) {
+  editing = inst;
+  editColor = inst.color || COLORS[0];
+
+  $('#ic-name').value = inst.name;
+  $('#ic-about').textContent = `Minecraft ${inst.mc} · ${inst.loader === 'vanilla' ? 'без модов' : inst.loader} · папка ${inst.folder || inst.mc}\\`;
+
+  // цвета — тот же набор, что и при создании сборки
+  const colors = $('#ic-colors');
+  colors.innerHTML = '';
+  for (const c of COLORS) {
+    const b = document.createElement('button');
+    b.style.background = c;
+    b.className = c === editColor ? 'on' : '';
+    b.title = c;
+    b.addEventListener('click', () => {
+      editColor = c;
+      colors.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    });
+    colors.appendChild(b);
+  }
+
+  const own = OWN_KEYS.some((k) => inst[k]);
+  const cfg = state.cfg;
+  $('#ic-maxram').value = inst.maxRam || cfg.maxRam;
+  $('#ic-ram-label').textContent = `${inst.maxRam || cfg.maxRam} МБ`;
+  $('#ic-minram').value = inst.minRam || cfg.minRam;
+  $('#ic-java').value = inst.javaPath || '';
+  $('#ic-jvm').value = inst.jvmArgs || '';
+  paintOwnMode(own);
+
+  $('#inst-cfg').hidden = false;
+  renderBackups(inst.id);
+}
+
+// ---------------- резервные копии миров ----------------
+
+/** Рисует оба списка: миры сборки и уже сделанные копии */
+async function renderBackups(instanceId) {
+  const wBox = $('#ic-worlds');
+  const bBox = $('#ic-backups');
+  wBox.innerHTML = '<span class="dim"><span class="spin"></span></span>';
+  bBox.innerHTML = '';
+
+  const [worlds, list] = await Promise.all([
+    call(app.backups.worlds(instanceId), true).catch(() => []),
+    call(app.backups.list(instanceId), true).catch(() => []),
+  ]);
+
+  wBox.innerHTML = worlds.length ? '' : '<span class="dim">миров пока нет</span>';
+  for (const w of worlds) {
+    const el = document.createElement('div');
+    el.className = 'side-item';
+    el.innerHTML = '<span></span><button class="ico-btn b" title="Сделать копию"></button>';
+    el.querySelector('span').textContent = `${w.name} · ${fmtSize(w.size)}`;
+    el.querySelector('span').title = w.name;
+    el.querySelector('.b').innerHTML = icon('download');
+    el.querySelector('.b').addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        const r = await call(app.backups.create({
+          taskId: newTask(), id: instanceId, world: w.name, keep: state.cfg.backupKeep || 5,
+        }));
+        toast(`Копия готова: ${fmtSize(r.size)}`);
+        renderBackups(instanceId);
+      } catch { /* тост уже показан */ } finally { clearProgress(); }
+    });
+    wBox.appendChild(el);
+  }
+
+  bBox.innerHTML = list.length ? '' : '<span class="dim">копий пока нет</span>';
+  for (const b of list) {
+    const el = document.createElement('div');
+    el.className = 'side-item';
+    el.innerHTML = `<span></span>
+      <button class="ico-btn r" title="Восстановить">${icon('refresh')}</button>
+      <button class="ico-btn d" title="Удалить">${icon('trash')}</button>`;
+    // дата в языке интерфейса: при английском «15 авг.» выглядело бы чужеродно
+    const when = new Date(b.at).toLocaleString(i18n.getLang(), {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+    el.querySelector('span').textContent = `${b.world} · ${when} · ${fmtSize(b.size)}`;
+    el.querySelector('span').title = b.file;
+
+    el.querySelector('.r').addEventListener('click', async () => {
+      const ok = await ask({
+        title: 'Восстановить мир?',
+        text: `Мир {${b.world}} вернётся к состоянию на ${when}.\n\nТекущая версия мира не удалится — она останется рядом с пометкой «до-восстановления».`,
+        actions: [
+          { label: 'Восстановить', value: true, kind: 'accent' },
+          { label: 'Отмена', value: null },
+        ],
+      });
+      if (!ok) return;
+      try {
+        const r = await call(app.backups.restore({ taskId: newTask(), id: instanceId, file: b.file }));
+        toast(r.kept ? `Мир восстановлен, прежний сохранён как ${r.kept}` : 'Мир восстановлен');
+        renderBackups(instanceId);
+      } catch { /* тост уже показан */ } finally { clearProgress(); }
+    });
+
+    el.querySelector('.d').addEventListener('click', async () => {
+      if (!confirm(i18n.t(`Удалить копию ${b.file}?`))) return;
+      await call(app.backups.remove(instanceId, b.file));
+      renderBackups(instanceId);
+    });
+    bBox.appendChild(el);
+  }
+}
+
+$('#ic-bk-folder').addEventListener('click', () => { if (editing) app.backups.folder(editing.id); });
+
+$('#ic-mode').querySelectorAll('button').forEach((b) =>
+  b.addEventListener('click', () => paintOwnMode(b.dataset.mode === 'own')));
+$('#ic-maxram').addEventListener('input', (e) => { $('#ic-ram-label').textContent = `${e.target.value} МБ`; });
+
+$('#ic-java-browse').addEventListener('click', async () => {
+  const j = await call(app.java.browse());
+  if (j) $('#ic-java').value = j.path;
+});
+
+const closeInstanceConfig = () => { $('#inst-cfg').hidden = true; editing = null; };
+$('#ic-close').addEventListener('click', closeInstanceConfig);
+$('#ic-cancel').addEventListener('click', closeInstanceConfig);
+$('#inst-cfg').addEventListener('click', (e) => { if (e.target.id === 'inst-cfg') closeInstanceConfig(); });
+
+$('#ic-save').addEventListener('click', async () => {
+  if (!editing) return;
+  const own = !$('#ic-own').hidden;
+  // null стирает своё значение — при запуске снова возьмётся общее
+  const patch = {
+    name: $('#ic-name').value.trim() || editing.name,
+    color: editColor,
+    minRam: own ? +$('#ic-minram').value || null : null,
+    maxRam: own ? +$('#ic-maxram').value || null : null,
+    javaPath: own ? $('#ic-java').value.trim() || null : null,
+    jvmArgs: own ? $('#ic-jvm').value.trim() || null : null,
+  };
+  await call(app.instances.update(editing.id, patch));
+  state.instances = await call(app.instances.list());
+  closeInstanceConfig();
+  renderInstances(); updateDock(); syncInstanceSelects();
+  toast('Настройки сборки сохранены');
+});
 
 function selectInstance(id) {
   state.selected = id;
@@ -438,6 +605,106 @@ async function openVersions(hit, ctx) {
 }
 $('#modal-close').addEventListener('click', () => ($('#modal').hidden = true));
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') $('#modal').hidden = true; });
+
+// ---------------- обновления модов ----------------
+
+let updFound = [];           // что нашли в последней проверке
+
+function renderUpdates() {
+  const box = $('#upd-list');
+  box.innerHTML = '';
+  if (!updFound.length) {
+    box.innerHTML = '<div class="note-center">все моды свежие</div>';
+    $('#upd-apply').disabled = true;
+    return;
+  }
+  $('#upd-apply').disabled = false;
+
+  for (const it of updFound) {
+    const row = document.createElement('div');
+    row.className = 'row-item upd-row';
+    row.innerHTML = `
+      <label class="check"><input type="checkbox" checked /></label>
+      <div class="row-main">
+        <div class="row-title"><b></b><span class="src ${it.source}">${it.source === 'modrinth' ? 'MODRINTH' : 'CURSEFORGE'}</span></div>
+        <div class="row-desc mono"></div>
+        <div class="row-stats"><span class="ct"></span></div>
+      </div>`;
+    row.querySelector('b').textContent = it.name;
+    row.querySelector('.row-desc').textContent = `→ ${it.newFile.name}`;
+    row.querySelector('.ct').textContent = [
+      it.channel,
+      it.newFile.size ? fmtSize(it.newFile.size) : '',
+      it.enabled ? '' : 'выключен',
+    ].filter(Boolean).join(' · ');
+    row.querySelector('input').addEventListener('change', (e) => { it.picked = e.target.checked; });
+    it.picked = true;
+    box.appendChild(row);
+  }
+}
+
+async function checkModUpdates() {
+  const ctx = modCtx();
+  if (!ctx.instance) return toast('Сначала выберите сборку', 'err');
+  const btn = $('#mods-check-upd');
+  btn.disabled = true;
+  $('#upd').hidden = false;
+  $('#upd-list').innerHTML = '<div class="note-center"><span class="spin"></span> проверяю моды…</div>';
+  $('#upd-sum').textContent = '';
+  $('#upd-unknown').hidden = true;
+  $('#upd-apply').disabled = true;
+
+  try {
+    const r = await call(app.mods.updates({
+      taskId: newTask(), instance: ctx.instance, kind: ctx.kind,
+      unstable: $('#upd-unstable').checked,
+    }));
+    updFound = r.items;
+    $('#upd-sum').textContent = `Проверено модов: ${r.checked}. Обновлений: ${r.items.length}.`;
+    if (r.unknown.length) {
+      $('#upd-unknown').hidden = false;
+      $('#upd-unknown').textContent = `Не нашлись в каталогах (${r.unknown.length}): ${r.unknown.slice(0, 6).join(', ')}`
+        + `${r.unknown.length > 6 ? ' и другие' : ''}. Такие моды проверить нельзя — обновляйте их вручную.`;
+    }
+    renderUpdates();
+  } catch {
+    $('#upd-list').innerHTML = '<div class="note-center">не удалось проверить обновления</div>';
+  } finally {
+    btn.disabled = false;
+    clearProgress();
+  }
+}
+
+$('#mods-check-upd').addEventListener('click', checkModUpdates);
+$('#upd-unstable').addEventListener('change', checkModUpdates);
+$('#upd-close').addEventListener('click', () => { $('#upd').hidden = true; });
+$('#upd').addEventListener('click', (e) => { if (e.target.id === 'upd') $('#upd').hidden = true; });
+$('#upd-all').addEventListener('change', (e) => {
+  $('#upd-list').querySelectorAll('input[type=checkbox]').forEach((c, i) => {
+    c.checked = e.target.checked;
+    if (updFound[i]) updFound[i].picked = e.target.checked;
+  });
+});
+
+$('#upd-apply').addEventListener('click', async (e) => {
+  const ctx = modCtx();
+  const items = updFound.filter((i) => i.picked);
+  if (!items.length) return toast('Ничего не выбрано', 'err');
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const r = await call(app.mods.applyUpdates({
+      taskId: newTask(), instance: ctx.instance, kind: ctx.kind, items,
+    }));
+    $('#upd').hidden = true;
+    toast(`Обновлено модов: ${r.done.length}`);
+    for (const f of r.failed) toast(`${f.name}: ${f.reason}`, 'err');
+    renderInstalledMods();
+  } catch { /* тост уже показан */ } finally {
+    btn.disabled = false;
+    clearProgress();
+  }
+});
 
 async function renderInstalledMods() {
   const ctx = modCtx();
@@ -840,6 +1107,11 @@ function bindSettings() {
   $('#s-fullscreen').addEventListener('change', (e) => save({ fullscreen: e.target.checked }));
   $('#s-close').addEventListener('change', (e) => save({ closeOnLaunch: e.target.checked }));
   $('#s-jvm').addEventListener('change', (e) => save({ jvmArgs: e.target.value }));
+
+  $('#s-backup').checked = cfg.backupBeforePlay === true;
+  $('#s-backup-keep').value = cfg.backupKeep || 5;
+  $('#s-backup').addEventListener('change', (e) => save({ backupBeforePlay: e.target.checked }));
+  $('#s-backup-keep').addEventListener('change', (e) => save({ backupKeep: Math.max(1, Math.min(30, +e.target.value || 5)) }));
 
   $('#s-java-browse').addEventListener('click', async () => {
     const j = await call(app.java.browse());

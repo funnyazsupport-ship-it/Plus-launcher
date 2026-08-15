@@ -27,6 +27,9 @@ const DEFAULTS = {
   // Язык интерфейса (ru, en, uk) и тема оформления (dark, light, system)
   lang: 'ru',
   theme: 'dark',
+  // Копировать миры перед запуском игры и сколько копий каждого мира хранить
+  backupBeforePlay: false,
+  backupKeep: 5,
   // Зеркала для файлов игры: auto — официальный сервер, зеркало как запасной;
   // mirror — сразу через зеркало; off — только официальные серверы.
   mirrors: 'auto',
@@ -62,6 +65,30 @@ function save(patch = {}) {
   fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), 'utf8');
   return cfg;
 }
+
+// Настройки, которые сборка может переопределить. Пусто или null — берём общее
+// значение из настроек лаунчера, чтобы менять память сразу везде было по-прежнему просто.
+const PER_INSTANCE = ['minRam', 'maxRam', 'javaPath', 'jvmArgs'];
+
+/**
+ * Настройки для запуска конкретной сборки: общие, поверх них — свои.
+ * Тяжёлому модпаку нужно 8 ГБ и Java 21, а сборке на 1.7.10 — 2 ГБ и Java 8,
+ * одним общим значением это не обслужить.
+ */
+function effectiveFor(instance = {}) {
+  const cfg = load();
+  const out = { ...cfg };
+  for (const key of PER_INSTANCE) {
+    const v = instance[key];
+    if (v === null || v === undefined || v === '') continue;
+    out[key] = v;
+  }
+  return out;
+}
+
+/** Какие настройки у сборки заданы свои — для подписи в интерфейсе */
+const overridesOf = (instance = {}) =>
+  PER_INSTANCE.filter((k) => instance[k] !== null && instance[k] !== undefined && instance[k] !== '');
 
 // ---------- ключ CurseForge ----------
 
@@ -105,5 +132,5 @@ function migrateSecrets() {
 
 module.exports = {
   load, save, DEFAULTS, curseforgeKey, setCurseforgeKey, hasOwnCurseforgeKey,
-  migrateSecrets, dropMovedKeys,
+  migrateSecrets, dropMovedKeys, effectiveFor, overridesOf, PER_INSTANCE,
 };
