@@ -217,6 +217,16 @@
         </div>
 
         <div class="panel">
+          <div class="side-head"><span class="lbl">Скачать скин игрока</span></div>
+          <p class="dim">Введите ник — лаунчер возьмёт скин с Mojang, а если такого ника там нет, поищет на Ely.by.</p>
+          <div class="form-row">
+            <label class="f grow"><span class="lbl">Ник игрока</span><input id="skin-nick" placeholder="Notch" maxlength="25" /></label>
+            <button class="btn accent" id="skin-fetch"><svg><use href="#i-search"/></svg>Найти</button>
+            <button class="btn" id="skin-fetch-own" title="Скин текущего профиля">Мой скин</button>
+          </div>
+          <p class="note" id="skin-fetch-note" hidden></p>
+
+          <div class="divider"></div>
           <div class="side-head"><span class="lbl">Библиотека</span><span class="count mono" id="skin-count">0</span></div>
           <div class="skin-grid" id="skin-library"></div>
 

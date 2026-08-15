@@ -71,6 +71,117 @@ function rememberVariant(file, variant) {
   config.save({ skinVariants: map });
 }
 
+// ---------------- скачивание скинов по нику ----------------
+
+const MOJANG_NAME = 'https://api.mojang.com/users/profiles/minecraft';
+const MOJANG_PROFILE = 'https://sessionserver.mojang.com/session/minecraft/profile';
+const ELY_SKIN = 'https://skinsystem.ely.by/skins';
+const ELY_TEXTURES = 'https://skinsystem.ely.by/textures';
+
+async function grab(url, headers = {}) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 15000);
+  try {
+    return await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: ac.signal });
+  } finally { clearTimeout(timer); }
+}
+
+/** Скин лицензионного аккаунта: ник -> UUID -> ссылка на текстуру */
+async function fromMojang(nick) {
+  const r = await grab(`${MOJANG_NAME}/${encodeURIComponent(nick)}`);
+  if (r.status === 404 || r.status === 204) return null;      // такого ника нет
+  if (!r.ok) throw new Error(`Mojang не ответил (HTTP ${r.status})`);
+  const { id, name } = await r.json();
+
+  const pr = await grab(`${MOJANG_PROFILE}/${id}`);
+  if (!pr.ok) throw new Error(`Профиль Mojang недоступен (HTTP ${pr.status})`);
+  const prof = await pr.json();
+
+  const raw = prof.properties?.find((p) => p.name === 'textures')?.value;
+  if (!raw) return null;
+  const tex = JSON.parse(Buffer.from(raw, 'base64').toString('utf8')).textures || {};
+  if (!tex.SKIN?.url) return null;                            // стандартный Steve, скачивать нечего
+
+  return {
+    name,
+    url: tex.SKIN.url,
+    variant: tex.SKIN.metadata?.model === 'slim' ? 'slim' : 'classic',
+    cape: tex.CAPE?.url || null,
+    source: 'mojang',
+  };
+}
+
+/** Скин аккаунта Ely.by — там свой сервис текстур */
+async function fromEly(nick) {
+  const meta = await grab(`${ELY_TEXTURES}/${encodeURIComponent(nick)}`).catch(() => null);
+  let variant = 'classic';
+  let url = `${ELY_SKIN}/${encodeURIComponent(nick)}.png`;
+  if (meta?.ok) {
+    const j = await meta.json().catch(() => null);
+    if (j?.SKIN?.url) url = j.SKIN.url;
+    if (j?.SKIN?.metadata?.model === 'slim') variant = 'slim';
+  }
+  const r = await grab(url);
+  if (!r.ok) return null;
+  if (!/image\/png/i.test(r.headers.get('content-type') || '')) return null;
+  return { name: nick, url, variant, cape: null, source: 'ely' };
+}
+
+/**
+ * Скачивает скин игрока по нику в библиотеку.
+ * Сначала спрашиваем Mojang, потом Ely.by — ники там разные, и оба варианта живые.
+ */
+async function downloadByName(nick) {
+  const clean = String(nick || '').trim();
+  if (!clean) throw new Error('Введите ник игрока');
+  if (!/^[A-Za-z0-9_.-]{1,25}$/.test(clean)) throw new Error('В нике есть недопустимые символы');
+
+  let found = null;
+  const errors = [];
+  for (const step of [fromMojang, fromEly]) {
+    try {
+      found = await step(clean);
+      if (found) break;
+    } catch (e) { errors.push(e.message); }
+  }
+  if (!found) {
+    throw new Error(errors.length
+      ? `Не удалось получить скин: ${errors[0]}`
+      : `Игрок «${clean}» не найден ни на Mojang, ни на Ely.by`);
+  }
+
+  const res = await grab(found.url);
+  if (!res.ok) throw new Error(`Не удалось скачать скин (HTTP ${res.status})`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const size = pngSize(buf);
+  if (!size) throw new Error('Сервис вернул не PNG');
+
+  await fsp.mkdir(dirs.skins, { recursive: true });
+  const dest = skinFile(found.name);
+  await fsp.writeFile(dest, buf);
+  rememberVariant(dest, found.variant);
+
+  return {
+    name: path.basename(dest, '.png'),
+    file: dest,
+    ...size,
+    variant: found.variant,
+    source: found.source,
+    hasCape: Boolean(found.cape),
+    dataUrl: `data:image/png;base64,${buf.toString('base64')}`,
+  };
+}
+
+/** Скачивает скин, который сейчас стоит на аккаунте, — чтобы не потерять свой же */
+async function downloadOwn(account) {
+  if (account?.type === 'microsoft') {
+    const p = await fetchProfile(account);
+    if (!p.skinUrl) throw new Error('На аккаунте стоит стандартный скин — скачивать нечего');
+    return downloadByName(p.name);
+  }
+  return downloadByName(account?.name);
+}
+
 // ---------------- лицензия Microsoft ----------------
 
 /** Загружает скин на аккаунт Mojang. variant: classic | slim */
@@ -209,4 +320,5 @@ module.exports = {
   list, add, remove, pngSize, skinFile,
   uploadMojang, resetMojang, setCape, fetchProfile,
   applyLocal, installLoaderMod, CSL_PROJECT,
+  downloadByName, downloadOwn,
 };

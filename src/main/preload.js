@@ -92,6 +92,8 @@ contextBridge.exposeInMainWorld('api', {
     list: () => invoke('skins:list'),
     add: () => invoke('skins:add'),
     remove: (file) => invoke('skins:remove', file),
+    fetch: (nick) => invoke('skins:fetch', nick),
+    fetchOwn: () => invoke('skins:fetchOwn'),
     upload: (opts) => invoke('skins:upload', opts),
     reset: () => invoke('skins:reset'),
     profile: () => invoke('skins:profile'),

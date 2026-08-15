@@ -488,6 +488,10 @@ handle('skins:add', async () => {
 
 handle('skins:remove', (file) => skins.remove(file));
 
+// скачивание чужого скина по нику и своего с аккаунта
+handle('skins:fetch', (nick) => skins.downloadByName(nick));
+handle('skins:fetchOwn', async () => skins.downloadOwn(await activeAccount()));
+
 handle('skins:upload', async ({ file, variant }) => {
   const account = await activeAccount();
   const res = await skins.uploadMojang(account, file, variant);

@@ -378,6 +378,28 @@ const DICT = {
     'No instances yet — you create them on the Versions tab.',
     'Збірок поки немає — їх створюють у вкладці «Версії».'],
 
+  // ---- скачивание скинов ----
+  'Скачать скин игрока': ['Download a player’s skin', 'Завантажити скін гравця'],
+  'Введите ник — лаунчер возьмёт скин с Mojang, а если такого ника там нет, поищет на Ely.by.': [
+    'Enter a nickname — the launcher takes the skin from Mojang, and if the name is not there, looks on Ely.by.',
+    'Введіть нік — лаунчер візьме скін з Mojang, а якщо такого ніка там немає, пошукає на Ely.by.'],
+  'Ник игрока': ['Player nickname', 'Нік гравця'],
+  'Мой скин': ['My skin', 'Мій скін'],
+  'Скин текущего профиля': ['Skin of the current profile', 'Скін поточного профілю'],
+  'Введите ник игрока': ['Enter a player nickname', 'Введіть нік гравця'],
+  'В нике есть недопустимые символы': [
+    'The nickname contains characters that are not allowed', 'У ніку є неприпустимі символи'],
+  'Сервис вернул не PNG': ['The service returned something that is not a PNG', 'Сервіс повернув не PNG'],
+  'На аккаунте стоит стандартный скин — скачивать нечего': [
+    'The account uses the default skin — nothing to download',
+    'На акаунті стоїть стандартний скін — завантажувати нічого'],
+  'Игрок «%s» не найден ни на Mojang, ни на Ely.by': [
+    'Player “%s” was not found on Mojang or Ely.by', 'Гравця «%s» не знайдено ні на Mojang, ні на Ely.by'],
+  '%s: скин %s, модель %s': ['%s: skin %s, model %s', '%s: скін %s, модель %s'],
+  '. У игрока есть плащ, но плащи так не скачиваются.': [
+    '. The player has a cape, but capes cannot be downloaded this way.',
+    '. У гравця є плащ, але плащі так не завантажуються.'],
+
   // ---- резервные копии миров ----
   'Резервные копии миров': ['World backups', 'Резервні копії світів'],
   'Копия — это zip с папкой мира. При восстановлении текущий мир не стирается, а откладывается рядом.': [

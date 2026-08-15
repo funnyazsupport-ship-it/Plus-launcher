@@ -883,6 +883,44 @@ $('#skin-add').addEventListener('click', async () => {
   toast(`Добавлено: ${added.map((a) => a.name).join(', ')}`);
 });
 
+// ---------------- скачивание скина по нику ----------------
+
+/** Общий путь для «Найти» и «Мой скин»: скачали — сразу выбрали и показали */
+async function fetchSkin(getter, btn) {
+  const note = $('#skin-fetch-note');
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>';
+  note.hidden = true;
+  try {
+    const s = await call(getter(), true);
+    state.skins.current = s;
+    state.skins.variant = s.variant || 'classic';
+    $$('#skin-variant button').forEach((b) => b.classList.toggle('on', b.dataset.variant === state.skins.variant));
+    await loadSkins();
+    note.hidden = false;
+    note.className = 'note ok';
+    note.textContent = `${s.name}: скин ${s.width}x${s.height}, модель ${s.variant}`
+      + `${s.hasCape ? '. У игрока есть плащ, но плащи так не скачиваются.' : ''}`;
+    $('#skin-nick').value = '';
+  } catch (e) {
+    note.hidden = false;
+    note.className = 'note err';
+    note.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = label;
+  }
+}
+
+$('#skin-fetch').addEventListener('click', (e) => {
+  const nick = $('#skin-nick').value.trim();
+  if (!nick) return toast('Введите ник игрока', 'err');
+  fetchSkin(() => app.skins.fetch(nick), e.currentTarget);
+});
+$('#skin-nick').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#skin-fetch').click(); });
+$('#skin-fetch-own').addEventListener('click', (e) => fetchSkin(() => app.skins.fetchOwn(), e.currentTarget));
+
 $('#skin-delete').addEventListener('click', async () => {
   const s = state.skins.current;
   if (!s) return toast('Сначала выберите скин', 'err');
