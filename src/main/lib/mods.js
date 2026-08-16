@@ -307,4 +307,6 @@ async function remove(instance, file, kind = 'mod') {
 module.exports = {
   search, versionsFor, projectInfo, install, listInstalled, toggle, remove, targetFolder, KINDS,
   missingLoaderApi, installLoaderApi,
+  // нужны установщику модпаков: он ходит в CurseForge своими запросами
+  cfHeaders, cfFallbackUrl,
 };

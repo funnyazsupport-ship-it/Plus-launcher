@@ -15,7 +15,9 @@ const auth = require('./lib/auth');
 const ely = require('./lib/ely');
 const mods = require('./lib/mods');
 const modUpdates = require('./lib/mod-updates');
+const modpacks = require('./lib/modpacks');
 const backups = require('./lib/backups');
+const cleanup = require('./lib/cleanup');
 const skins = require('./lib/skins');
 const storage = require('./lib/storage');
 const updater = require('./lib/updater');
@@ -37,16 +39,17 @@ ensureDirs();
  * Если такая папка уже занята другой сборкой, добавляем загрузчик (1.21.4-fabric),
  * а если и это занято — порядковый номер. Так моды разных версий никогда не смешиваются.
  */
-function pickFolder(mc, loader, instances) {
+function pickFolder(mc, loader, instances, preferred = '') {
   const taken = new Set(instances.map((i) => String(i.folder || '').toLowerCase()));
-  const base = folderName(mc);
-  if (!taken.has(base.toLowerCase())) return base;
-  if (loader && loader !== 'vanilla') {
-    const withLoader = folderName(`${mc}-${loader}`);
-    if (!taken.has(withLoader.toLowerCase())) return withLoader;
-  }
+  // preferred — пожелание вызывающего: имя модпака или «...-copy» при дублировании
+  const tries = [];
+  if (preferred) tries.push(folderName(preferred));
+  tries.push(folderName(mc));
+  if (loader && loader !== 'vanilla') tries.push(folderName(`${mc}-${loader}`));
+
+  for (const t of tries) if (!taken.has(t.toLowerCase())) return t;
   for (let n = 2; ; n++) {
-    const candidate = folderName(`${mc}-${n}`);
+    const candidate = folderName(`${tries[0]}-${n}`);
     if (!taken.has(candidate.toLowerCase())) return candidate;
   }
 }
@@ -173,15 +176,25 @@ handle('shell:open', (url) => shell.openExternal(url));
 handle('shell:openPath', (p) => shell.openPath(p));
 
 // ---------- конфиг ----------
-/** Наружу отдаём конфиг без секретов: ключ CurseForge в renderer не уходит вообще */
+/**
+ * Наружу отдаём конфиг без секретов. Ключ CurseForge в renderer не уходит вообще,
+ * токены аккаунтов — тоже: интерфейсу для показа профиля хватает ника и uuid,
+ * а лишняя копия токена в окне, где рисуются описания модов из интернета, ни к чему.
+ */
 function publicConfig() {
-  const { curseforgeKeyEnc, curseforgeKey, ...rest } = config.load();
-  return { ...rest, hasOwnCurseforgeKey: config.hasOwnCurseforgeKey() };
+  const { curseforgeKeyEnc, curseforgeKey, accounts, ...rest } = config.load();
+  return {
+    ...rest,
+    accounts: (accounts || []).map(({ accessToken, refreshToken, clientToken, ...a }) => a),
+    hasOwnCurseforgeKey: config.hasOwnCurseforgeKey(),
+  };
 }
 
 handle('config:get', () => publicConfig());
 handle('config:set', (patch) => {
-  const { curseforgeKey, curseforgeKeyEnc, ...safe } = patch || {};
+  // accounts из интерфейса не принимаем: там копия без токенов, и она бы их затёрла.
+  // Профилями занимаются отдельные обработчики auth:*.
+  const { curseforgeKey, curseforgeKeyEnc, accounts, ...safe } = patch || {};
   config.save(safe);
   return publicConfig();
 });
@@ -241,6 +254,10 @@ async function applyDiscord() {
 handle('discord:status', () => discord.status());
 handle('discord:apply', () => applyDiscord());
 handle('discord:select', (inst) => { presence.instance = inst; refreshPresence(); return true; });
+
+// ---------- уборка места ----------
+handle('cleanup:scan', ({ taskId }) => cleanup.scan(progress(taskId)));
+handle('cleanup:run', ({ taskId, ids }) => cleanup.clean(ids, progress(taskId)));
 
 // ---------- соединение и зеркала ----------
 handle('net:check', () => connectivity.check());
@@ -396,10 +413,13 @@ async function activeAccount() {
 // ---------- сборки (инстансы) ----------
 handle('instances:list', () => config.load().instances);
 
-handle('instances:create', async (data) => {
+const GAME_SUBDIRS = ['mods', 'saves', 'config', 'resourcepacks', 'shaderpacks'];
+
+/** Создаёт сборку и её игровую папку. Общая точка для ручного создания и модпаков. */
+async function createInstance(data) {
   const cfg = config.load();
   const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  const folder = pickFolder(data.mc, data.loader, cfg.instances);
+  const folder = pickFolder(data.mc, data.loader, cfg.instances, data.preferFolder);
   const inst = {
     id,
     name: data.name || `${data.mc} ${data.loader || ''}`.trim(),
@@ -411,13 +431,51 @@ handle('instances:create', async (data) => {
     color: data.color || '#74c045',
     created: Date.now(),
     lastPlayed: null,
+    // свои память и Java, если их задали при создании
+    ...Object.fromEntries(config.PER_INSTANCE.filter((k) => data[k]).map((k) => [k, data[k]])),
   };
   // Своя папка версии со всей игровой структурой внутри
-  for (const sub of ['mods', 'saves', 'config', 'resourcepacks', 'shaderpacks']) {
+  for (const sub of GAME_SUBDIRS) {
     await fsp.mkdir(path.join(gameDir(folder), sub), { recursive: true });
   }
   config.save({ instances: [...cfg.instances, inst], lastInstance: id });
   return inst;
+}
+
+handle('instances:create', (data) => createInstance(data));
+
+/**
+ * Копия сборки: те же версия и настройки, свои моды и конфиги.
+ * Миры копируются по выбору — они весят больше всего остального вместе взятого.
+ */
+handle('instances:duplicate', async ({ taskId, id, name, withWorlds }) => {
+  const cfg = config.load();
+  const src = cfg.instances.find((i) => i.id === id);
+  if (!src) throw new Error('Сборка не найдена');
+  const p = progress(taskId);
+
+  const copy = await createInstance({
+    ...src,
+    name: name || `${src.name} — копия`,
+    preferFolder: `${src.folder || src.mc}-copy`,
+  });
+
+  const from = gameDir(src.folder || src.mc || src.id);
+  const to = gameDir(copy.folder);
+  const skip = withWorlds ? [] : ['saves'];
+
+  let entries = [];
+  try { entries = await fsp.readdir(from, { withFileTypes: true }); } catch { /* папки ещё нет */ }
+  const wanted = entries.filter((e) => !skip.includes(e.name));
+
+  for (let i = 0; i < wanted.length; i++) {
+    const e = wanted[i];
+    p({ stage: `Копирую ${e.name}`, percent: Math.round((i / wanted.length) * 100) });
+    await fsp.cp(path.join(from, e.name), path.join(to, e.name), { recursive: true, force: true })
+      .catch((err) => console.warn('[duplicate]', e.name, err.message));
+  }
+  p({ stage: 'Готово', percent: 100 });
+  return copy;
 });
 
 handle('instances:update', (id, patch) => {
@@ -465,6 +523,41 @@ handle('mods:installed', (instance, kind) => mods.listInstalled(instance, kind))
 handle('mods:toggle', (instance, file, kind) => mods.toggle(instance, file, kind));
 handle('mods:remove', (instance, file, kind) => mods.remove(instance, file, kind));
 handle('mods:folder', (instance, kind) => shell.openPath(mods.targetFolder(instance, kind)));
+/**
+ * Установка модпака целиком: версия, загрузчик, все моды и конфиги, новая сборка.
+ * Порядок важен — сначала игра и загрузчик, потом уже содержимое пака в её папку.
+ */
+handle('packs:install', async ({ taskId, source, projectId, versionId, name }) => {
+  const p = progress(taskId);
+  const { zip, manifest } = await modpacks.readPack({ source, projectId, versionId }, p);
+
+  const want = manifest.loaderVersion;
+  const resolved = await loaders.resolveVersion(manifest.loader, manifest.mc, want);
+
+  const title = `${manifest.mc}${manifest.loader !== 'vanilla' ? ` · ${manifest.loader}` : ''}`;
+  p({ stage: `Установка Minecraft ${title}`, percent: 14 });
+  const installedId = await loaders.install(manifest.loader, manifest.mc, resolved.version,
+    (x) => p({ ...x, percent: 14 + Math.round(x.percent * 0.42) }));
+
+  const inst = await createInstance({
+    name: name || manifest.name || `${manifest.mc} модпак`,
+    mc: manifest.mc,
+    loader: manifest.loader,
+    loaderVersion: resolved.version,
+    versionId: installedId,
+    preferFolder: manifest.name || manifest.mc,
+  });
+
+  const r = await modpacks.applyPack(zip, manifest, gameDir(inst.folder), p);
+  return {
+    instance: inst,
+    pack: { name: manifest.name, version: manifest.packVersion, mc: manifest.mc, loader: manifest.loader },
+    // если точной версии загрузчика уже нет, честно скажем, что взяли другую
+    loaderSwapped: resolved.exact ? null : { want, used: resolved.version },
+    ...r,
+  };
+});
+
 handle('mods:updates', ({ taskId, instance, kind, unstable }) =>
   modUpdates.check(instance, kind, progress(taskId), { unstable: Boolean(unstable) }));
 handle('mods:applyUpdates', ({ taskId, instance, kind, items }) => modUpdates.apply(instance, items, kind, progress(taskId)));

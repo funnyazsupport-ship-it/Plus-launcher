@@ -54,7 +54,7 @@ async function listNeoForge(mc) {
   return all.slice().reverse().map((v) => ({ version: v, stable: !/beta/i.test(v) }));
 }
 
-async function list(loader, mc) {
+async function list_(loader, mc) {
   try {
     if (loader === 'fabric') return await listFabric(mc);
     if (loader === 'quilt') return await listQuilt(mc);
@@ -64,6 +64,27 @@ async function list(loader, mc) {
     return [];
   }
   return [];
+}
+
+/**
+ * Приводит версию загрузчика из чужого манифеста к той, что понимает наш установщик.
+ * Модпаки CurseForge пишут Forge как «47.2.0», а мавен ждёт «1.20.1-47.2.0».
+ * @returns {Promise<{version: string, exact: boolean}>} exact=false — точной версии нет, взяли ближайшую
+ */
+async function resolveVersion(loader, mc, want) {
+  if (!loader || loader === 'vanilla') return { version: null, exact: true };
+  const list = await list_(loader, mc);
+  if (!list.length) return { version: want, exact: Boolean(want) };
+
+  if (want) {
+    const exact = list.find((l) => l.version === want);
+    if (exact) return { version: exact.version, exact: true };
+    // «47.2.0» -> «1.20.1-47.2.0»
+    const tail = list.find((l) => l.version.endsWith(`-${want}`) || l.version === `${mc}-${want}`);
+    if (tail) return { version: tail.version, exact: true };
+  }
+  // нужной сборки загрузчика больше нет — берём свежую стабильную
+  return { version: (list.find((l) => l.stable) || list[0]).version, exact: false };
 }
 
 /** Итоговый id версии, который появится в versions/ */
@@ -161,4 +182,4 @@ async function install(loader, mc, loaderVersion, onProgress = () => {}) {
   return id;
 }
 
-module.exports = { list, install, profileId, neoMatches };
+module.exports = { list: list_, install, profileId, neoMatches, resolveVersion };

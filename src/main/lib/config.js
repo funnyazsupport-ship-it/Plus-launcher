@@ -45,16 +45,39 @@ const DEFAULTS = {
   lastInstance: null,
 };
 
+/*
+ * Токены аккаунтов на диске держим зашифрованными.
+ * Украденный config.json — это чужой вход в игру и доступ к скинам, поэтому
+ * шифруем тем же системным хранилищем, что и ключ CurseForge (на Windows — DPAPI):
+ * файл, унесённый на другой компьютер, ничего не даст.
+ * В памяти токены лежат расшифрованными — так остальному коду ничего менять не нужно.
+ */
+const TOKEN_FIELDS = ['accessToken', 'refreshToken', 'clientToken'];
+
+const mapTokens = (account, fn) => {
+  const out = { ...account };
+  for (const f of TOKEN_FIELDS) if (out[f]) out[f] = fn(out[f]);
+  return out;
+};
+
+// оффлайн-профилю шифровать нечего: там вместо токена постоянная строка «0»
+const isReal = (a) => a && a.type !== 'offline';
+
 let cache = null;
+let cacheEncrypted = false;                    // было ли шифрование доступно при чтении
 
 function load() {
-  if (cache) return cache;
+  // Конфиг могли прочитать до готовности приложения — тогда системное хранилище
+  // ещё не работало и токены расшифровать не удалось. Перечитываем, когда сможем.
+  if (cache && (cacheEncrypted || !secret.available())) return cache;
   ensureDirs();
   try {
     cache = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(configFile, 'utf8')) };
   } catch {
     cache = { ...DEFAULTS };
   }
+  cacheEncrypted = secret.available();
+  cache.accounts = (cache.accounts || []).map((a) => (isReal(a) ? mapTokens(a, secret.decrypt) : a));
   return cache;
 }
 
@@ -62,7 +85,12 @@ function save(patch = {}) {
   const cfg = { ...load(), ...patch };
   delete cfg.curseforgeKey;                    // открытым текстом ключ не пишем никогда
   cache = cfg;
-  fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), 'utf8');
+
+  const onDisk = {
+    ...cfg,
+    accounts: (cfg.accounts || []).map((a) => (isReal(a) ? mapTokens(a, secret.encrypt) : a)),
+  };
+  fs.writeFileSync(configFile, JSON.stringify(onDisk, null, 2), 'utf8');
   return cfg;
 }
 

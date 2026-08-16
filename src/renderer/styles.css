@@ -309,6 +309,10 @@ input[type=range]::-webkit-slider-thumb {
 
 /* обновления модов */
 .btn.sm.full { margin: 8px 0 10px; }
+/* фильтр в боковой колонке: она уже, чем строка поиска в каталоге */
+.search-wrap.sm { margin-top: 8px; min-width: 0; flex: none; }
+.search-wrap.sm input { padding: 6px 9px 6px 28px; font-size: 12px; }
+.search-wrap.sm .search-ico { width: 13px; height: 13px; left: 8px; }
 .upd-row { align-items: center; }
 .upd-row .check { margin: 0 2px 0 0; }
 .upd-row .row-desc { font-size: 11.5px; color: var(--accent); }

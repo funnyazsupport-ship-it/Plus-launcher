@@ -142,6 +142,7 @@ function renderInstances() {
     el.innerHTML = `
       <div class="card-acts">
         <button class="cfg" title="Настройки сборки">${icon('sliders')}</button>
+        <button class="dup" title="Дублировать сборку">${icon('copy')}</button>
         <button class="fld" title="Папка версии">${icon('folder')}</button>
         <button class="del" title="Удалить">${icon('trash')}</button>
       </div>
@@ -161,6 +162,7 @@ function renderInstances() {
     el.querySelector('.card-name').textContent = inst.name;
     el.addEventListener('click', () => selectInstance(inst.id));
     el.querySelector('.cfg').addEventListener('click', (e) => { e.stopPropagation(); openInstanceConfig(inst); });
+    el.querySelector('.dup').addEventListener('click', (e) => { e.stopPropagation(); duplicateInstance(inst); });
     el.querySelector('.fld').addEventListener('click', (e) => { e.stopPropagation(); app.instances.folder(inst.id); });
     el.querySelector('.del').addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -174,6 +176,41 @@ function renderInstances() {
     });
     box.appendChild(el);
   }
+}
+
+/** Копия сборки. Миры спрашиваем отдельно — они весят больше всего остального. */
+async function duplicateInstance(inst) {
+  const worlds = await call(app.backups.worlds(inst.id), true).catch(() => []);
+  const heavy = worlds.reduce((s, w) => s + w.size, 0);
+
+  const choice = await ask({
+    title: 'Дублировать сборку',
+    text: `Появится копия {${inst.name}} с теми же модами, конфигами и настройками.`
+      + (worlds.length
+        ? `\n\nМиров в сборке: ${worlds.length} (${fmtSize(heavy)}). Копировать их тоже?`
+        : '\n\nМиров в этой сборке нет.'),
+    actions: worlds.length
+      ? [
+        { label: 'Скопировать с мирами', value: 'worlds', kind: 'accent' },
+        { label: 'Только моды и настройки', value: 'mods' },
+        { label: 'Отмена', value: null },
+      ]
+      : [
+        { label: 'Дублировать', value: 'mods', kind: 'accent' },
+        { label: 'Отмена', value: null },
+      ],
+  });
+  if (!choice) return;
+
+  try {
+    const copy = await call(app.instances.duplicate({
+      taskId: newTask(), id: inst.id, withWorlds: choice === 'worlds',
+    }));
+    state.instances = await call(app.instances.list());
+    selectInstance(copy.id);
+    renderInstances();
+    toast(`Создана копия: ${copy.name}`);
+  } catch { /* тост уже показан */ } finally { clearProgress(); }
 }
 
 // ---------------- настройки отдельной сборки ----------------
@@ -501,7 +538,14 @@ $('#m-query').addEventListener('input', () => {
   searchTimer = setTimeout(() => searchMods(true), 350);
 });
 ['#m-kind', '#m-source', '#m-sort', '#m-instance'].forEach((s) =>
-  $(s).addEventListener('change', () => { renderInstalledMods(); searchMods(true); }));
+  $(s).addEventListener('change', () => { paintKindHint(); renderInstalledMods(); searchMods(true); }));
+
+/** Модпак ставится в новую сборку, поэтому выбор сборки для него не нужен */
+function paintKindHint() {
+  const pack = $('#m-kind').value === 'modpack';
+  $('#m-instance').disabled = pack;
+  $('#modpack-hint').hidden = !pack;
+}
 $('#skin-instance').addEventListener('change', () => { $('#skin-note').className = 'note'; loadSkinProfile(); });
 $('#mods-more').addEventListener('click', () => searchMods(false));
 $('#mods-open-folder').addEventListener('click', () => {
@@ -543,7 +587,7 @@ function modRow(hit, ctx) {
       <div class="row-stats"><span class="dl"></span><span class="au"></span><span class="ct"></span></div>
     </div>
     <div class="row-acts">
-      <button class="btn accent inst">${icon('download')}Установить</button>
+      <button class="btn accent inst">${icon('download')}${ctx.kind === 'modpack' ? 'Установить сборку' : 'Установить'}</button>
       <button class="btn vers">Версии</button>
     </div>`;
   const img = el.querySelector('img');
@@ -559,8 +603,50 @@ function modRow(hit, ctx) {
   return el;
 }
 
+/**
+ * Модпак ставится не в существующую сборку, а создаёт свою: внутри своя версия
+ * игры, свой загрузчик и свой набор модов, мешать его с чужими нельзя.
+ */
+async function installModpack(hit, versionId, btn) {
+  const ok = await ask({
+    title: hit.name,
+    text: 'Появится {новая сборка} со своей версией игры, загрузчиком, модами и настройками автора.'
+      + '\n\nВаши существующие сборки не изменятся. Загрузка может занять несколько минут — модпаки весят сотни мегабайт.',
+    actions: [
+      { label: 'Установить модпак', value: true, kind: 'accent' },
+      { label: 'Отмена', value: null },
+    ],
+  });
+  if (!ok) return;
+
+  const old = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
+  try {
+    const r = await call(app.mods.installPack({
+      taskId: newTask(), source: hit.source, projectId: hit.id, versionId,
+    }));
+    state.instances = await call(app.instances.list());
+    selectInstance(r.instance.id);
+    renderInstances(); syncInstanceSelects();
+
+    toast(`Модпак установлен: ${r.instance.name} (${r.installed} из ${r.total} модов)`);
+    if (r.loaderSwapped) {
+      toast(`Версии загрузчика ${r.loaderSwapped.want} больше нет, поставлена ${r.loaderSwapped.used}`, 'warn');
+    }
+    if (r.blocked.length) {
+      toast(`${r.blocked.length} модов автор запретил скачивать вне сайта — доставьте их вручную`, 'warn');
+    }
+    if (r.skipped.length) toast(`Не скачалось модов: ${r.skipped.length}`, 'warn');
+    go('play');
+  } catch { /* тост уже показан */ } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = old; }
+    clearProgress();
+  }
+}
+
 async function installMod(hit, versionId, btn) {
   const ctx = modCtx();
+  if (ctx.kind === 'modpack') return installModpack(hit, versionId, btn);
   if (!ctx.instance) return toast('Сначала выберите сборку', 'err');
   const old = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
@@ -675,6 +761,7 @@ async function checkModUpdates() {
   }
 }
 
+$('#mods-filter').addEventListener('input', (e) => { installedFilter = e.target.value; renderInstalledMods(); });
 $('#mods-check-upd').addEventListener('click', checkModUpdates);
 $('#upd-unstable').addEventListener('change', checkModUpdates);
 $('#upd-close').addEventListener('click', () => { $('#upd').hidden = true; });
@@ -706,15 +793,26 @@ $('#upd-apply').addEventListener('click', async (e) => {
   }
 });
 
+// то, что набрали в строке фильтра над списком установленного
+let installedFilter = '';
+
 async function renderInstalledMods() {
   const ctx = modCtx();
   const box = $('#installed-mods');
   const folders = { mod: 'mods', resourcepack: 'resourcepacks', shader: 'shaderpacks', modpack: 'modpacks', datapack: 'datapacks' };
   $('#mods-path').textContent = ctx.inst ? `${ctx.inst.folder || ctx.inst.mc}\\${folders[ctx.kind] || 'mods'}\\` : '—';
   if (!ctx.instance) { box.innerHTML = '<span class="dim">нет сборки</span>'; $('#inst-count').textContent = '0'; return; }
-  const list = await call(app.mods.installed(ctx.instance, ctx.kind), true).catch(() => []);
-  $('#inst-count').textContent = String(list.length);
-  box.innerHTML = list.length ? '' : '<span class="dim">пусто</span>';
+  const all = await call(app.mods.installed(ctx.instance, ctx.kind), true).catch(() => []);
+
+  const q = installedFilter.trim().toLowerCase();
+  const list = q ? all.filter((m) => m.file.toLowerCase().includes(q)) : all;
+
+  // в счётчике держим общее число, а при поиске показываем, сколько нашлось
+  const on = all.filter((m) => m.enabled).length;
+  $('#inst-count').textContent = q ? `${list.length} из ${all.length}` : `${on} из ${all.length}`;
+  $('#mods-filter-wrap').hidden = all.length < 8;      // при трёх модах фильтр только мешает
+
+  box.innerHTML = list.length ? '' : `<span class="dim">${q ? 'ничего не найдено' : 'пусто'}</span>`;
   for (const m of list) {
     const el = document.createElement('div');
     el.className = `side-item${m.enabled ? '' : ' off'}`;
@@ -1239,6 +1337,93 @@ function initLook(cfg) {
     if ((state.cfg.theme || 'dark') === 'system') applyTheme('system');
   });
 }
+
+// ---------------- уборка места ----------------
+
+let cleanGroups = [];
+
+function paintCleanTotal() {
+  const picked = cleanGroups.filter((g) => g.picked);
+  const sum = picked.reduce((s, g) => s + g.size, 0);
+  $('#clean-picked').textContent = picked.length ? `выбрано ${fmtSize(sum)}` : 'ничего не выбрано';
+  $('#clean-run').disabled = !picked.length;
+}
+
+$('#s-cleanup').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  $('#clean').hidden = false;
+  $('#clean-list').innerHTML = '<div class="note-center"><span class="spin"></span> считаю, что можно убрать…</div>';
+  $('#clean-sum').textContent = '';
+  $('#clean-warn').hidden = true;
+  $('#clean-run').disabled = true;
+
+  try {
+    const r = await call(app.cleanup.scan({ taskId: newTask() }));
+    cleanGroups = r.groups.map((g) => ({ ...g, picked: g.id !== 'cache' }));   // кэш по умолчанию не трогаем
+    const total = r.groups.reduce((s, g) => s + g.size, 0);
+    $('#clean-sum').textContent = r.groups.length
+      ? `Можно освободить до ${fmtSize(total)}. Файлы нужных сборок не трогаются.`
+      : 'Лишних файлов нет — всё, что скачано, используется сборками.';
+    if (r.warning) { $('#clean-warn').hidden = false; $('#clean-warn').textContent = r.warning; }
+
+    const box = $('#clean-list');
+    box.innerHTML = '';
+    for (const g of cleanGroups) {
+      const row = document.createElement('div');
+      row.className = 'row-item upd-row';
+      row.innerHTML = `
+        <label class="check"><input type="checkbox" ${g.picked ? 'checked' : ''} /></label>
+        <div class="row-main">
+          <div class="row-title"><b></b></div>
+          <div class="row-desc"></div>
+          <div class="row-stats"><span class="ct"></span></div>
+        </div>`;
+      row.querySelector('b').textContent = g.name;
+      row.querySelector('.row-desc').textContent = g.note;
+      row.querySelector('.ct').textContent = `${fmtSize(g.size)} · файлов: ${g.count}`;
+      row.querySelector('input').addEventListener('change', (ev) => { g.picked = ev.target.checked; paintCleanTotal(); });
+      box.appendChild(row);
+    }
+    paintCleanTotal();
+  } catch {
+    $('#clean-list').innerHTML = '<div class="note-center">не удалось посчитать</div>';
+  } finally {
+    btn.disabled = false;
+    clearProgress();
+  }
+});
+
+$('#clean-close').addEventListener('click', () => { $('#clean').hidden = true; });
+$('#clean').addEventListener('click', (e) => { if (e.target.id === 'clean') $('#clean').hidden = true; });
+
+$('#clean-run').addEventListener('click', async (e) => {
+  const picked = cleanGroups.filter((g) => g.picked);
+  if (!picked.length) return;
+  const ok = await ask({
+    title: 'Удалить выбранное?',
+    text: `Будет освобождено около {${fmtSize(picked.reduce((s, g) => s + g.size, 0))}}.\n\n`
+      + `Разделы: ${picked.map((g) => g.name).join(', ')}.\n\n`
+      + 'Файлы, нужные вашим сборкам, не тронутся. Если что-то понадобится снова, лаунчер скачает это при следующем запуске.',
+    actions: [
+      { label: 'Удалить', value: true, kind: 'danger' },
+      { label: 'Отмена', value: null },
+    ],
+  });
+  if (!ok) return;
+
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const r = await call(app.cleanup.run({ taskId: newTask(), ids: picked.map((g) => g.id) }));
+    $('#clean').hidden = true;
+    toast(`Освобождено ${fmtSize(r.freed)}`);
+    loadStorage();
+  } catch { /* тост уже показан */ } finally {
+    btn.disabled = false;
+    clearProgress();
+  }
+});
 
 // ---------------- соединение и зеркала ----------------
 

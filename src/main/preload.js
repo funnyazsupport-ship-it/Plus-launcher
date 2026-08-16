@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('api', {
     install: () => invoke('update:install'),
     version: () => invoke('app:version'),
   },
+  cleanup: {
+    scan: (opts) => invoke('cleanup:scan', opts),
+    run: (opts) => invoke('cleanup:run', opts),
+  },
   storage: {
     info: () => invoke('storage:info'),
     choose: () => invoke('storage:choose'),
@@ -62,6 +66,7 @@ contextBridge.exposeInMainWorld('api', {
     list: () => invoke('instances:list'),
     create: (data) => invoke('instances:create', data),
     update: (id, patch) => invoke('instances:update', id, patch),
+    duplicate: (opts) => invoke('instances:duplicate', opts),
     remove: (id, withFiles) => invoke('instances:delete', id, withFiles),
     folder: (id) => invoke('instances:folder', id),
   },
@@ -74,6 +79,7 @@ contextBridge.exposeInMainWorld('api', {
     toggle: (instance, file, kind) => invoke('mods:toggle', instance, file, kind),
     remove: (instance, file, kind) => invoke('mods:remove', instance, file, kind),
     folder: (instance, kind) => invoke('mods:folder', instance, kind),
+    installPack: (opts) => invoke('packs:install', opts),
     updates: (opts) => invoke('mods:updates', opts),
     applyUpdates: (opts) => invoke('mods:applyUpdates', opts),
     checkApi: (instanceId) => invoke('mods:checkApi', instanceId),

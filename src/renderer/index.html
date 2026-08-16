@@ -40,6 +40,8 @@
     <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4M13 1.5V5h-3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-link" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13 3 7.5 8.5M11.5 9.5v4h-9v-9h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-spark" viewBox="0 0 16 16"><path d="M8 1.5 9.4 5.6 13.5 7 9.4 8.4 8 12.5 6.6 8.4 2.5 7l4.1-1.4L8 1.5Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M12.8 11.2 13.4 12.9 15 13.5l-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.7Z" fill="currentColor"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="1.5" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 13.5h-9v-9h2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-broom" viewBox="0 0 16 16"><path d="M10.5 1.5 6 6m0 0 4 4m-4-4-1.5 1.5a2 2 0 0 0 0 2.8l1.2 1.2a2 2 0 0 0 2.8 0L10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14.5h5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
     <symbol id="i-min" viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.2"/></symbol>
     <symbol id="i-max" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
     <symbol id="i-x" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2"/></symbol>
@@ -173,6 +175,8 @@
         </select>
       </div>
 
+      <p class="note ok" id="modpack-hint" hidden>Модпак ставится в новую сборку: лаунчер сам поставит нужную версию игры, загрузчик, все моды и настройки автора. Существующие сборки не изменятся.</p>
+
       <div class="split">
         <div class="rows" id="mods-list"></div>
         <aside class="side">
@@ -181,6 +185,10 @@
             <span class="count mono" id="inst-count">0</span>
           </div>
           <div class="mono dim path" id="mods-path">—</div>
+          <div class="search-wrap sm" id="mods-filter-wrap" hidden>
+            <svg class="search-ico"><use href="#i-search"/></svg>
+            <input id="mods-filter" placeholder="Фильтр по названию" />
+          </div>
           <button class="btn sm full" id="mods-check-upd"><svg><use href="#i-refresh"/></svg>Проверить обновления</button>
           <div id="installed-mods" class="side-list"></div>
         </aside>
@@ -411,6 +419,9 @@
           <button class="btn accent" id="s-change-root">Изменить</button>
         </div>
         <p class="dim mono" id="st-free"></p>
+        <div class="divider"></div>
+        <p class="dim">Версии, которыми вы больше не пользуетесь, оставляют после себя библиотеки и ресурсы игры. Лаунчер найдёт их и покажет, сколько занимают.</p>
+        <button class="btn" id="s-cleanup"><svg><use href="#i-broom"/></svg>Освободить место</button>
       </div>
     </section>
 
@@ -471,6 +482,25 @@
     <div class="modal-body">
       <p id="ask-text" class="ask-text"></p>
       <div class="ask-actions" id="ask-actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- уборка места -->
+<div class="modal" id="clean" hidden>
+  <div class="modal-box">
+    <div class="modal-top">
+      <h3>Освободить место</h3>
+      <button class="ico-btn" id="clean-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p class="dim" id="clean-sum">—</p>
+      <p class="note warn" id="clean-warn" hidden></p>
+      <div class="rows" id="clean-list"></div>
+      <div class="form-row right">
+        <span class="dim mono" id="clean-picked"></span>
+        <button class="btn danger" id="clean-run"><svg><use href="#i-trash"/></svg>Удалить выбранное</button>
+      </div>
     </div>
   </div>
 </div>
