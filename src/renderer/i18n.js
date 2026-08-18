@@ -378,6 +378,16 @@ const DICT = {
     'No instances yet — you create them on the Versions tab.',
     'Збірок поки немає — їх створюють у вкладці «Версії».'],
 
+  // ---- фильтр каталога ----
+  'Показать все моды': ['Show all mods', 'Показати всі моди'],
+  'Показаны все моды каталога, включая несовместимые с этой сборкой': [
+    'Showing every mod in the catalogue, including ones incompatible with this instance',
+    'Показано всі моди каталогу, включно з несумісними з цією збіркою'],
+  'Показаны только моды для Minecraft %s': [
+    'Showing only mods for Minecraft %s', 'Показано лише моди для Minecraft %s'],
+  'Показаны только моды для Minecraft %s и %s': [
+    'Showing only mods for Minecraft %s and %s', 'Показано лише моди для Minecraft %s і %s'],
+
   // ---- поддержка ----
   'Поддержка': ['Support', 'Підтримка'],
   'Что-то не работает или есть предложение — напишите, разберёмся. Если игра вылетела, приложите текст из вкладки «Консоль».': [

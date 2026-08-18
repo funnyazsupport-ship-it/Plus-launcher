@@ -112,7 +112,11 @@ function activeAccount() {
 function go(page) {
   $$('.rail-item[data-page]').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
   $$('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${page}`));
-  if (page === 'mods') { syncInstanceSelects(); if (!$('#mods-list').children.length) searchMods(true); }
+  if (page === 'mods') {
+    syncInstanceSelects();
+    paintFilterNote();
+    if (!$('#mods-list').children.length) searchMods(true);
+  }
   if (page === 'settings') loadJavaList();
   if (page === 'skins') { syncInstanceSelects(); loadSkins(); loadSkinProfile(); }
 }
@@ -576,13 +580,38 @@ $('#skin-instance').addEventListener('change', (e) => selectInstance(e.target.va
 function modCtx() {
   const id = $('#m-instance').value;
   const inst = state.instances.find((i) => i.id === id);
+  // «Показать все моды» снимает фильтр по версии и загрузчику: мод под 1.20
+  // обычно работает и на 1.20.1, но каталоги об этом не знают и прячут его
+  const any = $('#m-any').checked;
+  const mc = inst?.mc || '';
+  const loader = inst && inst.loader !== 'vanilla' ? inst.loader : '';
   return {
     instance: id || null,
-    mc: inst?.mc || '',
-    loader: inst && inst.loader !== 'vanilla' ? inst.loader : '',
+    // ставим всегда под версию сборки, даже когда в списке показаны все моды:
+    // иначе с выключенным фильтром в сборку 1.20.1 приехал бы мод от 1.7.10
+    mc,
+    loader,
+    // а вот искать можно шире
+    searchMc: any ? '' : mc,
+    searchLoader: any ? '' : loader,
     kind: $('#m-kind').value,
     inst,
+    any,
   };
+}
+
+/** Показывает, по чему сейчас отфильтрован каталог — иначе кажется, что моды пропали */
+function paintFilterNote() {
+  const inst = state.instances.find((i) => i.id === $('#m-instance').value);
+  const box = $('#filter-note');
+  const pack = $('#m-kind').value === 'modpack';
+  if (!inst || pack) { box.hidden = true; return; }
+
+  box.hidden = false;
+  const loader = inst.loader && inst.loader !== 'vanilla' ? ` и ${inst.loader}` : '';
+  $('#filter-text').textContent = $('#m-any').checked
+    ? 'Показаны все моды каталога, включая несовместимые с этой сборкой'
+    : `Показаны только моды для Minecraft ${inst.mc}${loader}`;
 }
 
 let searchTimer = null;
@@ -590,13 +619,14 @@ $('#m-query').addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => searchMods(true), 350);
 });
-['#m-kind', '#m-source', '#m-sort', '#m-instance'].forEach((s) =>
-  $(s).addEventListener('change', () => { paintKindHint(); renderInstalledMods(); searchMods(true); }));
+['#m-kind', '#m-source', '#m-sort', '#m-instance', '#m-any'].forEach((s) =>
+  $(s).addEventListener('change', () => { paintKindHint(); paintFilterNote(); renderInstalledMods(); searchMods(true); }));
 
 /** Модпак ставится в новую сборку, поэтому выбор сборки для него не нужен */
 function paintKindHint() {
   const pack = $('#m-kind').value === 'modpack';
   $('#m-instance').disabled = pack;
+  $('#m-any').disabled = pack;
   $('#modpack-hint').hidden = !pack;
 }
 $('#skin-instance').addEventListener('change', () => { $('#skin-note').className = 'note'; loadSkinProfile(); });
@@ -616,7 +646,7 @@ async function searchMods(reset) {
   try {
     const res = await call(app.mods.search({
       query: $('#m-query').value.trim(),
-      kind: ctx.kind, mc: ctx.mc, loader: ctx.loader,
+      kind: ctx.kind, mc: ctx.searchMc, loader: ctx.searchLoader,
       source: $('#m-source').value, sort: $('#m-sort').value,
       limit: 20, offset: state.mods.offset,
     }));

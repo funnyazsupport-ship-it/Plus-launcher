@@ -321,6 +321,15 @@ input[type=range]::-webkit-slider-thumb {
 #inst-cfg .modal-body { max-height: 78vh; overflow-y: auto; }
 @media (max-width: 720px) { .two-lists { grid-template-columns: 1fr; } }
 
+/* подпись о том, по чему отфильтрован каталог */
+.filter-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 8px 11px; border-radius: var(--r);
+  background: var(--panel); border: 1px solid var(--line);
+  font-size: 12px; color: var(--dim);
+}
+.filter-note .check { font-size: 12px; white-space: nowrap; }
+
 /* обновления модов */
 .btn.sm.full { margin: 8px 0 10px; }
 /* фильтр в боковой колонке: она уже, чем строка поиска в каталоге */
