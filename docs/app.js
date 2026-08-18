@@ -10,10 +10,10 @@ const $ = (s) => document.querySelector(s);
 
 for (const el of [$('#nav-repo'), $('#foot-repo')]) el.href = `https://github.com/${REPO}`;
 
-// Кнопка ведёт на страницу релизов, а не на прямой .exe: там видны все версии
-// с описанием изменений, и ссылка не ломается, если в релизе переименован файл.
+// Пока не ответил GitHub, кнопка ведёт на страницу релизов — чтобы клик до загрузки
+// данных всё равно приводил к файлу, а не в пустоту. Ниже адрес заменится на прямой.
 $('#download').href = RELEASES;
-$('#download').target = '_blank';
+$('#download').removeAttribute('target');
 
 const fmtSize = (bytes) => {
   if (!bytes) return '';
@@ -75,28 +75,38 @@ function stepsFor(asset) {
 
   if (asset && asset.kind === 'archive') {
     return [
-      { title: 'Скачайте архив', text: `Кнопка выше открывает страницу релизов — берите самый верхний и качайте ${name}${size}.` },
+      { title: 'Скачайте архив', text: `Кнопка выше скачивает ${name}${size} напрямую.` },
       { title: 'Распакуйте его', text: 'Правой кнопкой по архиву → «Извлечь всё». Если Windows не открывает файл сама, поставьте 7-Zip или WinRAR — внутри лежит обычный установщик <code class="mono">.exe</code>.' },
       { title: 'Запустите установщик', text: SMARTSCREEN },
       { title: 'Выберите папку для игры', text: PICK_FOLDER },
     ];
   }
   return [
-    { title: 'Скачайте установщик', text: `Кнопка выше открывает страницу релизов — берите самый верхний и качайте ${name}${size}.` },
+    { title: 'Скачайте установщик', text: `Кнопка выше скачивает ${name}${size} напрямую.` },
     { title: 'Запустите его', text: SMARTSCREEN },
     { title: 'Выберите папку для игры', text: PICK_FOLDER },
   ];
 }
 
-/** Версия, размер и дата под кнопкой + шаги установки под нужный файл */
+/**
+ * Ставит на кнопку прямую ссылку на файл свежего релиза, заполняет версию,
+ * размер и дату, а шаги установки подгоняет под то, что реально скачается.
+ */
 async function loadRelease() {
   const meta = $('#release-meta');
+  const button = $('#download');
   try {
     const res = await fetch(API, { headers: { Accept: 'application/vnd.github+json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const rel = await res.json();
 
     const asset = pickAsset(rel.assets);
+    if (asset?.browser_download_url) {
+      // Прямая ссылка на файл: клик сразу начинает загрузку, страница GitHub не открывается.
+      button.href = asset.browser_download_url;
+      button.setAttribute('download', asset.name);
+    }
+
     const version = String(rel.tag_name || '').replace(/^v/, '');
     const parts = [];
     if (version) parts.push(`<b>версия ${version}</b>`);
@@ -106,7 +116,7 @@ async function loadRelease() {
 
     renderSteps(stepsFor(asset));
   } catch {
-    // нет релизов или GitHub не ответил — кнопка и шаги из разметки остаются рабочими
+    // GitHub не ответил — кнопка остаётся на странице релизов, шаги берутся из разметки
     meta.textContent = 'все версии на GitHub';
   }
 }

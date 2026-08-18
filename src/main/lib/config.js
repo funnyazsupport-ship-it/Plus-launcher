@@ -54,14 +54,42 @@ const DEFAULTS = {
  */
 const TOKEN_FIELDS = ['accessToken', 'refreshToken', 'clientToken'];
 
-const mapTokens = (account, fn) => {
-  const out = { ...account };
-  for (const f of TOKEN_FIELDS) if (out[f]) out[f] = fn(out[f]);
-  return out;
-};
-
 // оффлайн-профилю шифровать нечего: там вместо токена постоянная строка «0»
 const isReal = (a) => a && a.type !== 'offline';
+
+/*
+ * Исходные значения с диска. Конфиг может быть прочитан до готовности приложения —
+ * тогда системное хранилище ещё не работает и расшифровать нечем. Такие значения
+ * запоминаются здесь и при сохранении возвращаются на диск нетронутыми:
+ * записать пустоту поверх живого токена значит разлогинить человека.
+ * Symbol не попадает в JSON, поэтому в файле его не видно.
+ */
+const RAW = Symbol('token-blobs');
+
+function decryptAccount(a) {
+  if (!isReal(a)) return a;
+  const out = { ...a };
+  const unread = {};
+  for (const f of TOKEN_FIELDS) {
+    if (!a[f]) continue;
+    const value = secret.decrypt(a[f]);
+    if (!value) unread[f] = a[f];              // расшифровать не вышло
+    out[f] = value;
+  }
+  if (Object.keys(unread).length) out[RAW] = unread;
+  return out;
+}
+
+function encryptAccount(a) {
+  if (!isReal(a)) return a;
+  const unread = a[RAW];
+  const out = { ...a };
+  for (const f of TOKEN_FIELDS) {
+    if (unread && unread[f] !== undefined) out[f] = unread[f];   // возвращаем как было
+    else if (out[f]) out[f] = secret.encrypt(out[f]);
+  }
+  return out;
+}
 
 let cache = null;
 let cacheEncrypted = false;                    // было ли шифрование доступно при чтении
@@ -77,7 +105,7 @@ function load() {
     cache = { ...DEFAULTS };
   }
   cacheEncrypted = secret.available();
-  cache.accounts = (cache.accounts || []).map((a) => (isReal(a) ? mapTokens(a, secret.decrypt) : a));
+  cache.accounts = (cache.accounts || []).map(decryptAccount);
   return cache;
 }
 
@@ -86,10 +114,7 @@ function save(patch = {}) {
   delete cfg.curseforgeKey;                    // открытым текстом ключ не пишем никогда
   cache = cfg;
 
-  const onDisk = {
-    ...cfg,
-    accounts: (cfg.accounts || []).map((a) => (isReal(a) ? mapTokens(a, secret.encrypt) : a)),
-  };
+  const onDisk = { ...cfg, accounts: (cfg.accounts || []).map(encryptAccount) };
   fs.writeFileSync(configFile, JSON.stringify(onDisk, null, 2), 'utf8');
   return cfg;
 }
