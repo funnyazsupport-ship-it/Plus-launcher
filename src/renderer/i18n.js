@@ -378,6 +378,25 @@ const DICT = {
     'No instances yet — you create them on the Versions tab.',
     'Збірок поки немає — їх створюють у вкладці «Версії».'],
 
+  // ---- иконка сборки, двойной клик, подбор Java ----
+  'Иконка': ['Icon', 'Іконка'],
+  'Выбрать': ['Choose', 'Обрати'],
+  'Убрать': ['Remove', 'Прибрати'],
+  'Иконка сборки обновлена': ['Instance icon updated', 'Іконку збірки оновлено'],
+  'Картинка больше 4 МБ — возьмите поменьше': [
+    'The image is over 4 MB — pick a smaller one', 'Зображення більше 4 МБ — візьміть менше'],
+  'Такой формат картинки не поддерживается': [
+    'That image format is not supported', 'Такий формат зображення не підтримується'],
+  'Игра уже запущена': ['The game is already running', 'Гра вже запущена'],
+  'Каждая версия живёт в своей папке со своими модами. Двойной клик по карточке запускает игру': [
+    'Every version lives in its own folder with its own mods. Double-click a card to play',
+    'Кожна версія живе у власній теці зі своїми модами. Подвійний клік по картці запускає гру'],
+  'Лаунчер сам подбирает Java под каждую версию игры: старым версиям нужна Java 8, новым — 17 или 21. Если нужной нет, она скачается. Путь ниже используется только для версий, которым подходит именно эта Java.': [
+    'The launcher picks Java for each game version by itself: old versions need Java 8, new ones need 17 or 21. A missing one gets downloaded. The path below is used only for versions that match that exact Java.',
+    'Лаунчер сам підбирає Java під кожну версію гри: старим версіям потрібна Java 8, новим — 17 або 21. Якщо потрібної немає, вона завантажиться. Шлях нижче використовується лише для версій, яким підходить саме ця Java.'],
+  'Нужна Java %s, её нет — скачиваю': [
+    'Java %s is required and missing — downloading', 'Потрібна Java %s, її немає — завантажую'],
+
   // ---- модпаки ----
   'Установить сборку': ['Install modpack', 'Встановити збірку'],
   'Установить модпак': ['Install the modpack', 'Встановити модпак'],

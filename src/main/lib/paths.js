@@ -48,13 +48,14 @@ const dirs = {
   cache: path.join(root, 'cache'),
   logs: path.join(root, 'logs'),
   skins: path.join(root, 'skins'),
+  icons: path.join(root, 'icons'),
 };
 
 // Старое расположение игровых папок (до версии с папкой на каждую версию)
 const legacyInstances = path.join(root, 'instances');
 
 // Служебные каталоги — игровая папка версии не может называться так же
-const RESERVED = new Set(['versions', 'libraries', 'assets', 'natives', 'runtime', 'cache', 'logs', 'instances', 'skins', 'build']);
+const RESERVED = new Set(['versions', 'libraries', 'assets', 'natives', 'runtime', 'cache', 'logs', 'instances', 'skins', 'icons', 'backups', 'build']);
 
 function ensureDirs() {
   for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true });

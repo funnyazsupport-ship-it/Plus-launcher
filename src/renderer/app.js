@@ -20,6 +20,7 @@ const state = {
   instances: [],
   selected: null,
   color: COLORS[0],
+  icons: {},                    // id сборки -> картинка в виде data-URL
   mods: { offset: 0, busy: false, end: false },
   skins: { list: [], current: null, variant: 'classic', profile: null },
   busy: false,
@@ -146,7 +147,7 @@ function renderInstances() {
         <button class="fld" title="Папка версии">${icon('folder')}</button>
         <button class="del" title="Удалить">${icon('trash')}</button>
       </div>
-      <div class="card-mark">${icon('cube')}</div>
+      <div class="card-mark">${state.icons[inst.id] ? '<img alt="" />' : icon('cube')}</div>
       <div class="card-body">
         <div class="card-name"></div>
         <div class="card-meta">
@@ -160,7 +161,18 @@ function renderInstances() {
         </div>
       </div>`;
     el.querySelector('.card-name').textContent = inst.name;
+    const img = el.querySelector('.card-mark img');
+    if (img) img.src = state.icons[inst.id];
     el.addEventListener('click', () => selectInstance(inst.id));
+    // двойной клик по карточке сразу запускает сборку
+    el.addEventListener('dblclick', async () => {
+      selectInstance(inst.id);
+      // остановку по двойному клику не делаем: слишком легко закрыть игру случайно
+      if (await call(app.game.running())) return toast('Игра уже запущена', 'err');
+      launchInstance(inst);
+    });
+    // клики по значкам на карточке не должны считаться выбором или запуском
+    el.querySelector('.card-acts').addEventListener('dblclick', (e) => e.stopPropagation());
     el.querySelector('.cfg').addEventListener('click', (e) => { e.stopPropagation(); openInstanceConfig(inst); });
     el.querySelector('.dup').addEventListener('click', (e) => { e.stopPropagation(); duplicateInstance(inst); });
     el.querySelector('.fld').addEventListener('click', (e) => { e.stopPropagation(); app.instances.folder(inst.id); });
@@ -208,7 +220,7 @@ async function duplicateInstance(inst) {
     }));
     state.instances = await call(app.instances.list());
     selectInstance(copy.id);
-    renderInstances();
+    await refreshIcons();                 // копия наследует иконку оригинала
     toast(`Создана копия: ${copy.name}`);
   } catch { /* тост уже показан */ } finally { clearProgress(); }
 }
@@ -258,9 +270,44 @@ function openInstanceConfig(inst) {
   $('#ic-jvm').value = inst.jvmArgs || '';
   paintOwnMode(own);
 
+  paintIconPreview(inst.id);
   $('#inst-cfg').hidden = false;
   renderBackups(inst.id);
 }
+
+/** Кружок с иконкой в настройках сборки: либо картинка, либо стандартный кубик */
+function paintIconPreview(id) {
+  const box = $('#ic-icon');
+  const pic = state.icons[id];
+  box.innerHTML = pic ? '<img alt="" />' : '<svg><use href="#i-cube"/></svg>';
+  if (pic) box.querySelector('img').src = pic;
+  $('#ic-icon-clear').disabled = !pic;
+}
+
+/** Перечитывает иконки из main-процесса и перерисовывает всё, где они видны */
+async function refreshIcons() {
+  state.icons = await call(app.instances.icons(), true).catch(() => ({}));
+  renderInstances();
+  updateDock();
+}
+
+$('#ic-icon-set').addEventListener('click', async () => {
+  if (!editing) return;
+  const r = await call(app.instances.setIcon(editing.id));
+  if (!r) return;                       // окно выбора закрыли
+  state.icons[editing.id] = r.dataUrl;
+  paintIconPreview(editing.id);
+  renderInstances(); updateDock();
+  toast('Иконка сборки обновлена');
+});
+
+$('#ic-icon-clear').addEventListener('click', async () => {
+  if (!editing) return;
+  await call(app.instances.clearIcon(editing.id));
+  delete state.icons[editing.id];
+  paintIconPreview(editing.id);
+  renderInstances(); updateDock();
+});
 
 // ---------------- резервные копии миров ----------------
 
@@ -386,6 +433,12 @@ function updateDock() {
   const inst = currentInstance();
   const dock = $('.dock-mark');
   dock.style.setProperty('--c', inst?.color || COLORS[0]);
+
+  // в доке показываем ту же иконку, что и на карточке
+  const pic = inst && state.icons[inst.id];
+  dock.innerHTML = pic ? '<img alt="" />' : `<svg><use href="#i-cube"/></svg>`;
+  if (pic) dock.querySelector('img').src = pic;
+
   $('#pb-name').textContent = inst ? inst.name : 'сборка не выбрана';
   $('#pb-sub').textContent = inst
     ? `${inst.mc} · ${inst.loader === 'vanilla' ? 'vanilla' : inst.loader} · ${inst.folder || inst.mc}\\`
@@ -1419,6 +1472,7 @@ $('#clean-run').addEventListener('click', async (e) => {
     $('#clean').hidden = true;
     toast(`Освобождено ${fmtSize(r.freed)}`);
     loadStorage();
+    refreshInstalledVersions();       // часть версий удалена — список во вкладке «Версии» устарел
   } catch { /* тост уже показан */ } finally {
     btn.disabled = false;
     clearProgress();
@@ -1749,10 +1803,12 @@ $('#log-kill').addEventListener('click', async () => {
   toast(killed ? 'Игра остановлена' : 'Игра не запущена');
 });
 
-$('#btn-play').addEventListener('click', async () => {
-  const inst = currentInstance();
+/**
+ * Запуск сборки. Вынесен отдельно, потому что вызывается и с большой кнопки,
+ * и двойным кликом по карточке.
+ */
+async function launchInstance(inst) {
   if (!inst) return;
-  if (await call(app.game.running())) return call(app.game.kill());
 
   // моды в папке есть, а Fabric API нет — загрузчик упадёт ещё до запуска игры
   const need = await call(app.mods.checkApi(inst.id), true).catch(() => null);
@@ -1789,6 +1845,14 @@ $('#btn-play').addEventListener('click', async () => {
     setProgress(0, '');
     btn.disabled = false;
   } finally { state.busy = false; }
+}
+
+$('#btn-play').addEventListener('click', async () => {
+  const inst = currentInstance();
+  if (!inst) return;
+  // у большой кнопки двойная роль: запустить или остановить уже идущую игру
+  if (await call(app.game.running())) return call(app.game.kill());
+  return launchInstance(inst);
 });
 
 app.on('progress', (p) => setProgress(p.percent, p.detail ? `${p.stage} — ${p.detail}` : p.stage));
@@ -1819,6 +1883,7 @@ app.on('auth:code', (dc) => {
   state.cfg = await call(app.config.get());
   state.instances = await call(app.instances.list());
   state.selected = state.cfg.lastInstance || state.instances[0]?.id || null;
+  state.icons = await call(app.instances.icons(), true).catch(() => ({}));
 
   renderSwatches();
   renderInstances();

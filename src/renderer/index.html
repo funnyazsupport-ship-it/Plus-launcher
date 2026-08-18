@@ -87,7 +87,7 @@
     <!-- ИГРАТЬ -->
     <section class="page active" id="page-play">
       <div class="head">
-        <div><h1>Сборки</h1><p class="dim">Каждая версия живёт в своей папке со своими модами</p></div>
+        <div><h1>Сборки</h1><p class="dim">Каждая версия живёт в своей папке со своими модами. Двойной клик по карточке запускает игру</p></div>
         <button class="btn accent" id="go-create"><svg><use href="#i-plus"/></svg>Новая сборка</button>
       </div>
       <div class="grid-cards" id="instances"></div>
@@ -337,6 +337,7 @@
 
       <div class="panel">
         <div class="side-head"><span class="lbl">Java</span><button class="btn sm" id="java-refresh"><svg><use href="#i-refresh"/></svg>Найти</button></div>
+        <p class="dim">Лаунчер сам подбирает Java под каждую версию игры: старым версиям нужна Java 8, новым — 17 или 21. Если нужной нет, она скачается. Путь ниже используется только для версий, которым подходит именно эта Java.</p>
         <div class="form-row">
           <label class="f grow"><span class="lbl">Путь к java.exe</span><input id="s-java" class="mono" placeholder="пусто — подобрать автоматически" /></label>
           <button class="btn" id="s-java-browse">Обзор</button>
@@ -534,6 +535,15 @@
     </div>
     <div class="modal-body">
       <div class="form-row">
+        <div class="f"><span class="lbl">Иконка</span>
+          <div class="icon-pick">
+            <div class="icon-preview" id="ic-icon"><svg><use href="#i-cube"/></svg></div>
+            <div class="stack">
+              <button class="btn sm" id="ic-icon-set">Выбрать</button>
+              <button class="btn sm" id="ic-icon-clear">Убрать</button>
+            </div>
+          </div>
+        </div>
         <label class="f grow"><span class="lbl">Название</span><input id="ic-name" /></label>
         <div class="f"><span class="lbl">Цвет</span><div class="swatches" id="ic-colors"></div></div>
       </div>

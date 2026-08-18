@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
@@ -460,6 +460,11 @@ handle('instances:duplicate', async ({ taskId, id, name, withWorlds }) => {
     preferFolder: `${src.folder || src.mc}-copy`,
   });
 
+  // иконку тоже наследуем — копия должна выглядеть как оригинал
+  if (fs.existsSync(iconPath(src.id))) {
+    await fsp.copyFile(iconPath(src.id), iconPath(copy.id)).catch(() => {});
+  }
+
   const from = gameDir(src.folder || src.mc || src.id);
   const to = gameDir(copy.folder);
   const skip = withWorlds ? [] : ['saves'];
@@ -489,7 +494,59 @@ handle('instances:delete', async (id, withFiles) => {
   const cfg = config.load();
   const inst = cfg.instances.find((i) => i.id === id);
   if (withFiles && inst) await fsp.rm(gameDir(inst.folder || inst.mc || id), { recursive: true, force: true });
+  // иконка живёт вне игровой папки, поэтому убираем её отдельно
+  await fsp.unlink(iconPath(id)).catch(() => {});
   config.save({ instances: cfg.instances.filter((i) => i.id !== id) });
+  return true;
+});
+
+// ---------- иконка сборки ----------
+
+const ICON_INPUT = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'];
+const ICON_SIDE = 128;                         // иконка рисуется в кружке ~46px, больше не нужно
+
+const iconPath = (id) => path.join(dirs.icons, `${id}.png`);
+
+/** Картинка сборки в виде data-URL: интерфейс рисует её без доступа к файлам */
+function instanceIcon(id) {
+  try {
+    const p = iconPath(id);
+    if (!fs.existsSync(p)) return null;
+    return `data:image/png;base64,${fs.readFileSync(p).toString('base64')}`;
+  } catch { return null; }                     // битый файл — как будто иконки нет
+}
+
+handle('instances:icons', () => Object.fromEntries(
+  config.load().instances.map((i) => [i.id, instanceIcon(i.id)]).filter(([, v]) => v),
+));
+
+handle('instances:setIcon', async (id) => {
+  const inst = config.load().instances.find((i) => i.id === id);
+  if (!inst) throw new Error('Сборка не найдена');
+  const r = await dialog.showOpenDialog(win, {
+    title: `Иконка для сборки «${inst.name}»`,
+    properties: ['openFile'],
+    filters: [{ name: 'Картинки', extensions: ICON_INPUT }],
+  });
+  if (r.canceled || !r.filePaths[0]) return null;
+
+  const img = nativeImage.createFromPath(r.filePaths[0]);
+  if (img.isEmpty()) throw new Error('Не удалось прочитать картинку');
+
+  // Уменьшаем и всегда сохраняем в png. Иначе снимок экрана на 8 МБ поехал бы
+  // в окно лаунчера целиком, и так на каждую сборку при каждой перерисовке.
+  const { width, height } = img.getSize();
+  const small = Math.max(width, height) > ICON_SIDE
+    ? img.resize(width >= height ? { width: ICON_SIDE } : { height: ICON_SIDE })
+    : img;
+
+  await fsp.mkdir(dirs.icons, { recursive: true });
+  await fsp.writeFile(iconPath(id), small.toPNG());
+  return { id, dataUrl: instanceIcon(id) };
+});
+
+handle('instances:clearIcon', async (id) => {
+  await fsp.unlink(iconPath(id)).catch(() => {});
   return true;
 });
 

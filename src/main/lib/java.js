@@ -89,28 +89,50 @@ async function scanAll() {
   return [...uniq.values()].sort((a, b) => b.major - a.major);
 }
 
-/** Нужная мажорная версия Java для версии игры (по javaVersion из version.json) */
+/**
+ * Нужная мажорная версия Java. Обычно она прямо записана в version.json,
+ * а таблица ниже — запасной вариант для профилей загрузчиков без этого поля.
+ * Java 21 стала обязательной с 1.20.5, а не со всей ветки 1.20.
+ */
 function requiredMajor(versionJson) {
   const c = versionJson?.javaVersion?.majorVersion;
   if (c) return c;
   const id = versionJson?.id || '';
-  const m = id.match(/^1\.(\d+)/);
+  const m = id.match(/^1\.(\d+)(?:\.(\d+))?/);
   if (!m) return 17;
   const minor = parseInt(m[1], 10);
-  if (minor >= 20) return 21;
+  const patch = parseInt(m[2] || '0', 10);
+  if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
   if (minor >= 18) return 17;
-  if (minor >= 17) return 16;
+  if (minor === 17) return 16;
   return 8;
 }
 
-/** Подобрать java под версию: точное совпадение мажора, иначе ближайшая старше */
+/**
+ * Подходит ли эта Java версии игры.
+ * Для старых версий (нужна Java 8) новее брать нельзя: на 9+ они просто не стартуют,
+ * а Forge падает ещё раньше. Для остальных более новая Java обычно работает.
+ */
+const fits = (have, need) => (need <= 8 ? have === 8 : have >= need);
+
+/**
+ * Подбирает java под версию игры.
+ * Путь, указанный руками, берётся только если он подходит этой версии: человек
+ * выбирает его один раз, а версии у него разные — на Java 21 сборка 1.12.2 не запустится.
+ */
 async function pick(major, preferred = '') {
   if (preferred) {
     const info = await probe(preferred);
-    if (info) return info;
+    // Именно точное совпадение: Forge на 1.20.1 ломается под Java 21, хотя формально
+    // она новее. Указанный путь — предпочтение, а не приказ запускать всё на нём.
+    if (info && info.major === major) return info;
+    if (info) console.log(`[java] указана Java ${info.major}, версии нужна ${major} — подбираю сам`);
   }
   const all = await findAll();
-  return all.find((j) => j.major === major) || all.find((j) => j.major > major) || all[0] || null;
+  const exact = all.find((j) => j.major === major);
+  if (exact) return exact;
+  // ближайшая подходящая сверху: 17 предпочтительнее 25, если нужна 17
+  return all.filter((j) => fits(j.major, major)).sort((a, b) => a.major - b.major)[0] || null;
 }
 
 const ADOPTIUM = 'https://api.adoptium.net/v3/assets/latest';
@@ -148,11 +170,15 @@ async function install(major, onProgress = () => {}) {
   return found[0];
 }
 
-/** Гарантирует наличие подходящей java: находит или скачивает */
+/** Гарантирует наличие подходящей java: находит или скачивает нужную */
 async function ensure(major, preferred = '', onProgress = () => {}) {
   const found = await pick(major, preferred);
-  if (found && found.major >= major) return found.path;
+  if (found && fits(found.major, major)) {
+    console.log(`[java] версии нужна Java ${major}, беру ${found.major}: ${found.path}`);
+    return found.path;
+  }
+  onProgress({ stage: `Нужна Java ${major}, её нет — скачиваю`, percent: 5 });
   return install(major, onProgress);
 }
 
-module.exports = { findAll, probe, pick, install, ensure, requiredMajor };
+module.exports = { findAll, probe, pick, install, ensure, requiredMajor, fits };
