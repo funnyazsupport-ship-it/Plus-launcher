@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Страница не найдена — Plus Launcher</title>
+<meta name="robots" content="noindex" />
+<link rel="icon" href="/img/favicon.png" />
+<link rel="stylesheet" href="/styles.css" />
+<meta name="theme-color" content="#0d0e11" />
+<style>
+  /* Страница короткая, поэтому подвал прижимаем вниз, а содержимое ставим по центру */
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  .lost { flex: 1; display: grid; place-items: center; padding: 72px max(20px, 5vw); text-align: center; }
+  .lost-code { font-size: 84px; font-weight: 700; line-height: 1; color: var(--accent); letter-spacing: -.03em; }
+  .lost h1 { font-size: 26px; margin: 18px 0 10px; }
+  .lost p { color: var(--dim); max-width: 44ch; margin: 0 auto 26px; }
+  .lost .cta { justify-content: center; }
+  .lost-path {
+    display: inline-block; margin-bottom: 22px; padding: 6px 12px; border-radius: var(--r);
+    background: var(--panel); border: 1px solid var(--line); font-family: var(--mono);
+    font-size: 12.5px; color: var(--dim); max-width: 90vw; overflow-wrap: anywhere;
+  }
+</style>
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true" style="position:absolute;width:0;height:0"><defs>
+  <symbol id="i-logo" viewBox="0 0 48 48">
+    <path d="M24 4 44 15 24 26 4 15Z" fill="#8fd45a"/>
+    <path d="M4 15 24 26v18L4 33Z" fill="#5da336"/>
+    <path d="M44 15 24 26v18l20-11Z" fill="#3f7526"/>
+    <path d="M24 4 44 15 24 26 4 15Z" fill="none" stroke="#0d0e11" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M4 15v18l20 11 20-11V15" fill="none" stroke="#0d0e11" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M24 26v18" fill="none" stroke="#0d0e11" stroke-width="1.5"/>
+  </symbol>
+  <symbol id="i-home" viewBox="0 0 16 16"><path d="M2 7 8 2l6 5v7H2Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6.5 14V9.5h3V14" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+  <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 1.5v9m0 0L4.5 7M8 10.5 11.5 7M2 13.5h12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
+<header class="top">
+  <a class="brand" href="/">
+    <svg class="brand-mark"><use href="#i-logo"/></svg>
+    <span class="brand-text"><b>PLUS</b><i>LAUNCHER</i></span>
+  </a>
+  <nav>
+    <a href="/#features">Возможности</a>
+    <a href="/#install">Установка</a>
+    <a href="/#faq">Вопросы</a>
+  </nav>
+</header>
+
+<main class="lost">
+  <div>
+    <div class="lost-code">404</div>
+    <h1>Страница не найдена</h1>
+    <div class="lost-path" id="lost-path"></div>
+    <p>Такой страницы на сайте нет. Возможно, в ссылке опечатка или страница переехала.</p>
+    <div class="cta">
+      <a class="btn primary" href="/"><svg><use href="#i-home"/></svg><span>На главную</span></a>
+      <a class="btn" href="/#install"><svg><use href="#i-download"/></svg><span>Скачать лаунчер</span></a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <p class="foot-note">Не связано с Mojang и Microsoft. Minecraft — товарный знак Mojang Studios.</p>
+</footer>
+
+<script>
+  // Показываем адрес, по которому человек пришёл, — так проще заметить опечатку
+  var box = document.getElementById('lost-path');
+  var path = location.pathname + location.search;
+  box.textContent = path.length > 90 ? path.slice(0, 90) + '…' : path;
+</script>
+</body>
+</html>

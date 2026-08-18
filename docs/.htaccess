@@ -1,0 +1,35 @@
+# Настройки сайта Plus Launcher для Apache/LiteSpeed.
+# Кладётся в public_html рядом с index.html
+
+# Свои страницы ошибок вместо служебных «Not Found» от сервера
+ErrorDocument 404 /404.html
+ErrorDocument 403 /404.html
+
+# Не показываем содержимое папок: чужим людям незачем знать, что где лежит.
+# Исключение — downloads, там свой .htaccess возвращает список файлов.
+Options -Indexes
+
+# Кодировка по умолчанию, иначе кириллица в служебных страницах может поехать
+AddDefaultCharset UTF-8
+
+<IfModule mod_mime.c>
+  AddType application/x-rar-compressed .rar
+  AddType application/octet-stream .exe
+  AddType application/x-msdownload .msi
+</IfModule>
+
+# Сжатие текстовых файлов: страница весит меньше и открывается быстрее
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+# Картинки и стили меняются редко — пусть браузер держит их у себя.
+# Саму страницу не кэшируем, иначе люди не увидят обновлённый номер версии.
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/png "access plus 30 days"
+  ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 1 days"
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>

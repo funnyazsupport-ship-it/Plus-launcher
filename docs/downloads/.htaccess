@@ -1,0 +1,4 @@
+# Здесь список файлов, наоборот, полезен: по нему видно все выложенные версии
+# и точные имена файлов. В остальных папках он выключен в public_html/.htaccess
+Options +Indexes
+IndexOptions FancyIndexing HTMLTable NameWidth=* SuppressDescription
