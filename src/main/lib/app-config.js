@@ -20,8 +20,11 @@ module.exports = {
   // Должен быть публичным: приватные релизы GitHub без токена не отдаёт.
   updateRepo: 'funnyazsupport-ship-it/Plus-launcher',
 
-  // Azure client id для входа по Microsoft (device code flow)
-  msClientId: '00000000402b5328',
+  // Azure client id для входа по Microsoft (вход по коду устройства).
+  // Своё приложение: portal.azure.com -> Entra ID -> App registrations.
+  // Прежний общеизвестный id официального лаунчера (00000000402b5328) Microsoft
+  // отозвала — он отвечает AADSTS700016, поэтому годится только своё приложение.
+  msClientId: 'fedcc289-f7c4-491e-9b38-004e27113133',
 
   // Адрес счётчика игроков на сайте. Пусто — лаунчер никуда не отмечается.
   // Скрипты лежат в docs/api и кладутся в public_html/api на хостинге.

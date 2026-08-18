@@ -168,17 +168,22 @@ const DICT = {
     'Скін записано, але у збірці без завантажувача мод скінів не встановити — гра покаже стандартного Стіва.'],
 
   // ---- аккаунт ----
-  'Ely.by или оффлайн-профиль': ['Ely.by or an offline profile', 'Ely.by або офлайн-профіль'],
-  // вход через Microsoft пока убран из интерфейса, строки оставлены для возврата панели
-  'Лицензия Microsoft или оффлайн-профиль': [
-    'Microsoft licence or an offline profile', 'Ліцензія Microsoft або офлайн-профіль'],
+  'Лицензия Microsoft, Ely.by или оффлайн-профиль': [
+    'Microsoft licence, Ely.by or an offline profile', 'Ліцензія Microsoft, Ely.by або офлайн-профіль'],
+  'Вход по коду устройства. Нужна купленная Minecraft: Java Edition — на аккаунтах без неё вход не пройдёт.': [
+    'Device code sign-in. Requires a purchased Minecraft: Java Edition — accounts without it cannot sign in.',
+    'Вхід за кодом пристрою. Потрібна придбана Minecraft: Java Edition — на акаунтах без неї вхід не пройде.'],
   'Лицензия Microsoft': ['Microsoft licence', 'Ліцензія Microsoft'],
   'Вход по коду устройства. Нужна купленная Minecraft: Java Edition.': [
     'Device code sign-in. Requires a purchased Minecraft: Java Edition.',
     'Вхід за кодом пристрою. Потрібна придбана Minecraft: Java Edition.'],
   'Войти через Microsoft': ['Sign in with Microsoft', 'Увійти через Microsoft'],
-  'Откройте': ['Open', 'Відкрийте'],
-  'и введите код': ['and enter the code', 'та введіть код'],
+  'Браузер уже открыт с этим кодом — подтвердите вход там. Если страница не открылась, зайдите на': [
+    'Your browser is already open with this code — confirm the sign-in there. If the page did not open, go to',
+    'Браузер уже відкрито з цим кодом — підтвердіть вхід там. Якщо сторінка не відкрилася, зайдіть на'],
+  'и введите код вручную.': ['and enter the code manually.', 'та введіть код вручну.'],
+  'Открыть снова': ['Open again', 'Відкрити знову'],
+  'Скопировать код': ['Copy the code', 'Скопіювати код'],
   'Код скопирован': ['Code copied', 'Код скопійовано'],
   'Вход выполнен': ['Signed in', 'Вхід виконано'],
   'Оффлайн-профиль': ['Offline profile', 'Офлайн-профіль'],

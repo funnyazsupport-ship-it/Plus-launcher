@@ -28,9 +28,15 @@ async function form(url, params) {
 /** Шаг 1: код для ввода на microsoft.com/link */
 async function startDeviceCode(clientId) {
   const d = await form(`${MS}/devicecode`, { client_id: clientId, scope: SCOPE });
+  const uri = d.verification_uri || 'https://www.microsoft.com/link';
   return {
     userCode: d.user_code,
-    verificationUri: d.verification_uri || 'https://www.microsoft.com/link',
+    verificationUri: uri,
+    // Адрес с уже подставленным кодом: человеку остаётся только подтвердить вход.
+    // Microsoft поле verification_uri_complete не присылает, но параметр otc
+    // её страница понимает и сама переводит на форму подтверждения.
+    verificationUriComplete: d.verification_uri_complete
+      || `${uri}?otc=${encodeURIComponent(d.user_code)}`,
     deviceCode: d.device_code,
     interval: (d.interval || 5) * 1000,
     expiresIn: d.expires_in || 900,

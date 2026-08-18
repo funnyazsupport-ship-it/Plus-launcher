@@ -1213,11 +1213,9 @@ function renderWho() {
 }
 
 /*
- * Вход через Microsoft временно убран из интерфейса — панель закомментирована
- * в index.html. Обработчики привязываются только если она есть в разметке,
- * поэтому при возврате панели ничего дописывать не придётся.
- * Сам вход в main-процессе работает: уже добавленные профили Microsoft
- * запускают игру и продлевают сессию как раньше.
+ * Вход через Microsoft по коду устройства. Обработчики привязываются, только
+ * если панель есть в разметке: её однажды убирали из интерфейса, и проверка
+ * позволяет сделать это снова, ничего не ломая.
  */
 function bindMicrosoftLogin() {
   const start = $('#ms-login');
@@ -1238,6 +1236,7 @@ function bindMicrosoftLogin() {
   $('#ms-cancel').addEventListener('click', () => { app.auth.cancel(); $('#ms-code-box').hidden = true; });
   $('#ms-copy').addEventListener('click', () => { navigator.clipboard.writeText($('#ms-code').textContent.trim()); toast('Код скопирован'); });
   $('#ms-open').addEventListener('click', () => {
+    if (msLinkWithCode) return app.shell.open(msLinkWithCode);
     const u = $('#ms-url').textContent.trim();
     app.shell.open(u.startsWith('http') ? u : `https://${u}`);
   });
@@ -1931,13 +1930,22 @@ app.on('game:exit', ({ code }) => {
   logLine(`\n[launcher] игра завершена, код ${code}\n`);
   toast(code === 0 ? 'Игра закрыта' : `Игра завершилась с кодом ${code}`, code === 0 ? '' : 'err');
 });
+// адрес с подставленным кодом — им пользуются кнопка «Открыть» и автопереход
+let msLinkWithCode = '';
+
 app.on('auth:code', (dc) => {
   // код придёт только если панель Microsoft возвращена в разметку
   if (!$('#ms-code-box')) return;
+  msLinkWithCode = dc.verificationUriComplete || dc.verificationUri;
   $('#ms-code-box').hidden = false;
   $('#ms-code').textContent = dc.userCode;
   $('#ms-url').textContent = dc.verificationUri;
   go('account');
+
+  // Сразу открываем страницу с уже вписанным кодом — человеку остаётся подтвердить.
+  // Код при этом остаётся на экране: браузер мог не открыться, а страница —
+  // потерять код при перезагрузке, и тогда его вводят руками.
+  app.shell.open(msLinkWithCode);
 });
 
 // ---------------- старт ----------------
