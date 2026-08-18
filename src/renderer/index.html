@@ -40,6 +40,7 @@
     <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4M13 1.5V5h-3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-link" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13 3 7.5 8.5M11.5 9.5v4h-9v-9h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-spark" viewBox="0 0 16 16"><path d="M8 1.5 9.4 5.6 13.5 7 9.4 8.4 8 12.5 6.6 8.4 2.5 7l4.1-1.4L8 1.5Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M12.8 11.2 13.4 12.9 15 13.5l-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.7Z" fill="currentColor"/></symbol>
+    <symbol id="i-tg" viewBox="0 0 16 16"><path d="M14.5 2.3 1.9 7.2c-.6.2-.6.7 0 .9l3.2 1 1.2 3.7c.2.5.4.6.8.2l1.7-1.6 3.3 2.4c.5.3.9.1 1-.5l1.8-9.9c.1-.6-.3-.9-.8-.7Z" fill="currentColor"/><path d="m5.6 9.1 6.4-4.2-4.9 4.8-.2 2.3" fill="none" stroke="#0d0e11" stroke-width=".9" stroke-linejoin="round"/></symbol>
     <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="1.5" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 13.5h-9v-9h2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-broom" viewBox="0 0 16 16"><path d="M10.5 1.5 6 6m0 0 4 4m-4-4-1.5 1.5a2 2 0 0 0 0 2.8l1.2 1.2a2 2 0 0 0 2.8 0L10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14.5h5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
     <symbol id="i-min" viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.2"/></symbol>
@@ -415,6 +416,15 @@
       </div>
 
       <div class="panel">
+        <div class="side-head"><span class="lbl">Поддержка</span><span class="count mono" id="s-support-name">—</span></div>
+        <p class="dim">Что-то не работает или есть предложение — напишите, разберёмся. Если игра вылетела, приложите текст из вкладки «Консоль».</p>
+        <div class="stack row">
+          <button class="btn accent" id="s-support"><svg><use href="#i-tg"/></svg>Написать в Telegram</button>
+          <button class="btn" id="s-site"><svg><use href="#i-link"/></svg>Сайт лаунчера</button>
+        </div>
+      </div>
+
+      <div class="panel">
         <div class="side-head"><span class="lbl">Папка лаунчера</span><span class="count mono" id="st-size">—</span></div>
         <p class="dim">Здесь лежат версии, библиотеки, ресурсы, Java и папки версий с модами и мирами. Их можно держать на другом диске.</p>
         <div class="form-row">
@@ -474,6 +484,7 @@
         <button class="btn" id="crash-log"><svg><use href="#i-terminal"/></svg>Открыть консоль</button>
         <button class="btn" id="crash-retry"><svg><use href="#i-refresh"/></svg>Разобрать заново</button>
         <button class="btn" id="crash-copy">Скопировать</button>
+        <button class="btn" id="crash-support"><svg><use href="#i-tg"/></svg>Написать в поддержку</button>
       </div>
     </div>
   </div>

@@ -14,7 +14,7 @@ const API = `https://api.github.com/repos/${REPO}/releases/latest`;
  * Если файла там не окажется, сайт молча возьмёт файл из релиза GitHub —
  * кнопка не должна вести в никуда из-за опечатки в имени.
  */
-const LOCAL_FILE = 'downloads/PlusLauncher-Setup-1.10.0.rar';
+const LOCAL_FILE = 'downloads/PlusLauncher-Setup-1.11.0.rar';
 
 // сюда же складываются файлы, если имя совпадает с именем файла в релизе
 const LOCAL_DIR = 'downloads/';

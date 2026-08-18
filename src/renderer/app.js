@@ -1340,8 +1340,24 @@ function bindSettings() {
 
   initMirrors(cfg.mirrors || 'auto');
   initLook(cfg);
+  initSupport();
   loadStorage();
 }
+
+// ---------------- поддержка ----------------
+
+// адреса приходят из app-config.js, чтобы правились в одном месте
+let links = { support: '', supportName: '', site: '', repo: '' };
+
+async function initSupport() {
+  links = await call(app.links(), true).catch(() => links);
+  $('#s-support-name').textContent = links.supportName || 'Telegram';
+  $('#s-support').hidden = !links.support;
+  $('#s-site').hidden = !links.site;
+}
+
+$('#s-support').addEventListener('click', () => links.support && app.shell.open(links.support));
+$('#s-site').addEventListener('click', () => links.site && app.shell.open(links.site));
 
 // ---------------- язык и тема ----------------
 
@@ -1574,6 +1590,21 @@ $('#crash-log').addEventListener('click', () => { $('#crash').hidden = true; go(
 $('#crash-copy').addEventListener('click', () => {
   navigator.clipboard.writeText($('#crash-text').textContent.trim());
   toast('Скопировано');
+});
+
+// Разбор кладём в буфер сразу: человек идёт в Telegram, и там ему будет что вставить
+$('#crash-support').addEventListener('click', () => {
+  if (!links.support) return;
+  const inst = currentInstance();
+  const text = [
+    `Plus Launcher ${$('#app-version').textContent || ''}`.trim(),
+    inst ? `Сборка: ${inst.mc} · ${inst.loader}` : '',
+    '',
+    $('#crash-text').textContent.trim(),
+  ].filter(Boolean).join('\n');
+  navigator.clipboard.writeText(text).catch(() => {});
+  toast('Разбор скопирован — вставьте его в сообщение');
+  app.shell.open(links.support);
 });
 $('#crash-retry').addEventListener('click', async (e) => {
   e.currentTarget.disabled = true;

@@ -203,6 +203,14 @@ handle('config:set', (patch) => {
 // ключ CurseForge живёт только в main-процессе и в интерфейс не выводится
 handle('paths:get', () => dirs);
 
+// адреса поддержки и сайта заданы в app-config.js — интерфейсу их надо знать
+handle('app:links', () => ({
+  support: appConfig.supportUrl || '',
+  supportName: appConfig.supportName || '',
+  site: appConfig.siteUrl || '',
+  repo: appConfig.updateRepo ? `https://github.com/${appConfig.updateRepo}` : '',
+}));
+
 // ---------- Discord Rich Presence ----------
 
 // что показываем в Discord: выбранная сборка и запущена ли игра

@@ -37,6 +37,7 @@
   <symbol id="i-discord" viewBox="0 0 16 16"><path d="M6 3.2C4.6 3.4 3.4 3.9 2.6 4.5 1.6 6.4 1.1 8.6 1.3 11c1 .8 2 1.3 3 1.6l.7-1.1M10 3.2c1.4.2 2.6.7 3.4 1.3 1 1.9 1.5 4.1 1.3 6.5-1 .8-2 1.3-3 1.6l-.7-1.1" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="8.5" r="1.2" fill="currentColor"/><circle cx="10" cy="8.5" r="1.2" fill="currentColor"/></symbol>
   <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4M13 1.5V5h-3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-link" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13 3 7.5 8.5M11.5 9.5v4h-9v-9h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-tg" viewBox="0 0 16 16"><path d="M14.5 2.3 1.9 7.2c-.6.2-.6.7 0 .9l3.2 1 1.2 3.7c.2.5.4.6.8.2l1.7-1.6 3.3 2.4c.5.3.9.1 1-.5l1.8-9.9c.1-.6-.3-.9-.8-.7Z" fill="currentColor"/><path d="m5.6 9.1 6.4-4.2-4.9 4.8-.2 2.3" fill="none" stroke="#0d0e11" stroke-width=".9" stroke-linejoin="round"/></symbol>
 </defs></svg>
 
 <header class="top">
@@ -160,7 +161,18 @@
       <details><summary>Как обновиться?</summary><p>Скачайте свежую версию со страницы релизов и поставьте поверх — профили, настройки и скачанные версии игры останутся на месте. Лаунчер умеет и сам находить обновления: он проверяет релизы при запуске и предлагает установить новую версию.</p></details>
       <details><summary>Можно ли играть на серверах?</summary><p>Да, как в обычном Minecraft. Аккаунт Ely.by работает на серверах, которые его поддерживают, оффлайн-профиль — на серверах без проверки лицензии.</p></details>
       <details><summary>Плохо качается или зависает установка версии?</summary><p>В настройках есть раздел «Соединение и зеркала»: лаунчер умеет брать те же файлы Mojang с зеркала, VPN для этого не нужен. Там же кнопка проверки — она показывает, какие серверы у вас открываются, а какие нет.</p></details>
+      <details><summary>Нашли ошибку или нужна помощь?</summary><p>Напишите в поддержку в Telegram — <a href="https://t.me/dowuto" target="_blank" rel="noopener">@dowuto</a>. Если игра вылетела, приложите текст из вкладки «Консоль» в лаунчере: по нему причина видна сразу.</p></details>
     </div>
+  </section>
+
+  <section id="support" class="section support">
+    <div>
+      <h2>Нашли ошибку?</h2>
+      <p class="dim">Напишите в поддержку — разберёмся. Там же можно предложить, что добавить в лаунчер.</p>
+    </div>
+    <a class="btn primary" href="https://t.me/dowuto" target="_blank" rel="noopener">
+      <svg><use href="#i-tg"/></svg><span>Написать в Telegram</span>
+    </a>
   </section>
 </main>
 
@@ -171,6 +183,7 @@
   </div>
   <div class="foot-links">
     <a id="foot-repo" href="#" target="_blank" rel="noopener"><svg><use href="#i-link"/></svg> Исходники и релизы</a>
+    <a href="https://t.me/dowuto" target="_blank" rel="noopener"><svg><use href="#i-tg"/></svg> Поддержка в Telegram</a>
   </div>
   <p class="foot-note">Не связано с Mojang и Microsoft. Minecraft — товарный знак Mojang Studios.</p>
 </footer>

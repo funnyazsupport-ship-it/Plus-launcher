@@ -26,4 +26,9 @@ module.exports = {
   // Адрес счётчика игроков на сайте. Пусто — лаунчер никуда не отмечается.
   // Скрипты лежат в docs/api и кладутся в public_html/api на хостинге.
   statsUrl: 'https://plus-launcher.fun/api',
+
+  // Куда писать при проблемах. Показывается в настройках и в окне вылета.
+  supportUrl: 'https://t.me/dowuto',
+  supportName: '@dowuto',
+  siteUrl: 'https://plus-launcher.fun',
 };

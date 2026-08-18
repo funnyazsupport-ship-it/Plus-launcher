@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
     open: (url) => invoke('shell:open', url),
     openPath: (p) => invoke('shell:openPath', p),
   },
+  links: () => invoke('app:links'),
   config: {
     get: () => invoke('config:get'),
     set: (patch) => invoke('config:set', patch),
