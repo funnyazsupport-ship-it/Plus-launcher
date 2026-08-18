@@ -6,6 +6,14 @@ const REPO = 'funnyazsupport-ship-it/Plus-launcher';
 const RELEASES = `https://github.com/${REPO}/releases`;
 const API = `https://api.github.com/repos/${REPO}/releases/latest`;
 
+/*
+ * Папка на своём хостинге, куда можно положить установщик рядом с сайтом.
+ * Если файл с таким же именем, как в релизе, там лежит — качаем со своего домена,
+ * иначе с GitHub. Ничего настраивать не надо: положили файл — заработало,
+ * не положили — сайт продолжает работать как раньше.
+ */
+const LOCAL_DIR = 'downloads/';
+
 const $ = (s) => document.querySelector(s);
 
 for (const el of [$('#nav-repo'), $('#foot-repo')]) el.href = `https://github.com/${REPO}`;
@@ -89,6 +97,19 @@ function stepsFor(asset) {
 }
 
 /**
+ * Лежит ли такой же файл рядом с сайтом. Проверяем HEAD-запросом и смотрим тип:
+ * многие хостинги на несуществующий файл отвечают страницей ошибки с кодом 200.
+ */
+async function localCopy(name) {
+  try {
+    const r = await fetch(LOCAL_DIR + encodeURIComponent(name), { method: 'HEAD' });
+    if (!r.ok) return null;
+    if (/text\/html/i.test(r.headers.get('content-type') || '')) return null;
+    return LOCAL_DIR + encodeURIComponent(name);
+  } catch { return null; }               // открыли файл локально или хостинг не ответил
+}
+
+/**
  * Ставит на кнопку прямую ссылку на файл свежего релиза, заполняет версию,
  * размер и дату, а шаги установки подгоняет под то, что реально скачается.
  */
@@ -102,8 +123,9 @@ async function loadRelease() {
 
     const asset = pickAsset(rel.assets);
     if (asset?.browser_download_url) {
-      // Прямая ссылка на файл: клик сразу начинает загрузку, страница GitHub не открывается.
-      button.href = asset.browser_download_url;
+      // Свой домен предпочтительнее: короче ссылка и не зависит от доступности GitHub.
+      // Нет своей копии — ведём прямо на файл релиза, страница GitHub всё равно не открывается.
+      button.href = (await localCopy(asset.name)) || asset.browser_download_url;
       button.setAttribute('download', asset.name);
     }
 
