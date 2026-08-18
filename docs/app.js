@@ -7,11 +7,16 @@ const RELEASES = `https://github.com/${REPO}/releases`;
 const API = `https://api.github.com/repos/${REPO}/releases/latest`;
 
 /*
- * Папка на своём хостинге, куда можно положить установщик рядом с сайтом.
- * Если файл с таким же именем, как в релизе, там лежит — качаем со своего домена,
- * иначе с GitHub. Ничего настраивать не надо: положили файл — заработало,
- * не положили — сайт продолжает работать как раньше.
+ * Файл установщика, лежащий рядом с сайтом на своём хостинге.
+ * Кнопка ведёт сюда, а не на GitHub. При выпуске новой версии меняется
+ * одна эта строка (и файл кладётся в public_html/downloads).
+ *
+ * Если файла там не окажется, сайт молча возьмёт файл из релиза GitHub —
+ * кнопка не должна вести в никуда из-за опечатки в имени.
  */
+const LOCAL_FILE = 'downloads/PlusLauncher-Setup-1.10.0.rar';
+
+// сюда же складываются файлы, если имя совпадает с именем файла в релизе
 const LOCAL_DIR = 'downloads/';
 
 const $ = (s) => document.querySelector(s);
@@ -100,13 +105,21 @@ function stepsFor(asset) {
  * Лежит ли такой же файл рядом с сайтом. Проверяем HEAD-запросом и смотрим тип:
  * многие хостинги на несуществующий файл отвечают страницей ошибки с кодом 200.
  */
-async function localCopy(name) {
+async function exists(url) {
   try {
-    const r = await fetch(LOCAL_DIR + encodeURIComponent(name), { method: 'HEAD' });
-    if (!r.ok) return null;
-    if (/text\/html/i.test(r.headers.get('content-type') || '')) return null;
-    return LOCAL_DIR + encodeURIComponent(name);
-  } catch { return null; }               // открыли файл локально или хостинг не ответил
+    const r = await fetch(url, { method: 'HEAD' });
+    if (!r.ok) return false;
+    // многие хостинги на несуществующий файл отдают страницу ошибки с кодом 200
+    return !/text\/html/i.test(r.headers.get('content-type') || '');
+  } catch { return false; }              // открыли файл локально или хостинг не ответил
+}
+
+/** Ссылка на свой файл: сначала указанный вручную, потом одноимённый с релизом */
+async function localCopy(name) {
+  if (LOCAL_FILE && await exists(LOCAL_FILE)) return LOCAL_FILE;
+  const guess = LOCAL_DIR + encodeURIComponent(name || '');
+  if (name && await exists(guess)) return guess;
+  return null;
 }
 
 /**
@@ -116,15 +129,23 @@ async function localCopy(name) {
 async function loadRelease() {
   const meta = $('#release-meta');
   const button = $('#download');
+
+  // Свой файл ставим первым делом и не ждём GitHub: если его API молчит или
+  // заблокирован у человека, кнопка всё равно должна качать файл с нашего домена.
+  const own = await localCopy(null);
+  if (own) {
+    button.href = own;
+    button.setAttribute('download', own.split('/').pop());
+  }
+
   try {
     const res = await fetch(API, { headers: { Accept: 'application/vnd.github+json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const rel = await res.json();
 
     const asset = pickAsset(rel.assets);
-    if (asset?.browser_download_url) {
-      // Свой домен предпочтительнее: короче ссылка и не зависит от доступности GitHub.
-      // Нет своей копии — ведём прямо на файл релиза, страница GitHub всё равно не открывается.
+    if (asset?.browser_download_url && !own) {
+      // своей копии нет — ведём прямо на файл релиза, страница GitHub не открывается
       button.href = (await localCopy(asset.name)) || asset.browser_download_url;
       button.setAttribute('download', asset.name);
     }
@@ -144,3 +165,41 @@ async function loadRelease() {
 }
 
 loadRelease();
+
+/* ---------- сколько человек играет прямо сейчас ---------- */
+
+const STATS_URL = 'api/stats.php';
+const REFRESH_MS = 60 * 1000;
+
+/** «1 игрок», «2 игрока», «5 игроков» */
+function playersWord(n) {
+  const ten = n % 100;
+  if (ten >= 11 && ten <= 14) return 'игроков';
+  const one = n % 10;
+  if (one === 1) return 'игрок';
+  if (one >= 2 && one <= 4) return 'игрока';
+  return 'игроков';
+}
+
+async function loadOnline() {
+  const box = $('#online');
+  if (!box) return;
+  try {
+    const res = await fetch(STATS_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const s = await res.json();
+    const n = Number(s.online) || 0;
+
+    // Пока никто не играет, показывать «0 игроков» невесело и бессмысленно —
+    // прячем счётчик до первого живого игрока.
+    if (!n) { box.hidden = true; return; }
+    $('#online-count').textContent = n;
+    $('#online-label').textContent = `${playersWord(n)} сейчас в игре`;
+    box.hidden = false;
+  } catch {
+    box.hidden = true;                 // счётчик не поднят или сломан — просто не показываем
+  }
+}
+
+loadOnline();
+setInterval(loadOnline, REFRESH_MS);

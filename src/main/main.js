@@ -18,6 +18,7 @@ const modUpdates = require('./lib/mod-updates');
 const modpacks = require('./lib/modpacks');
 const backups = require('./lib/backups');
 const cleanup = require('./lib/cleanup');
+const stats = require('./lib/presence-stats');
 const skins = require('./lib/skins');
 const storage = require('./lib/storage');
 const updater = require('./lib/updater');
@@ -132,7 +133,7 @@ app.whenReady().then(() => {
   applyDiscord();
   rememberDataDir();
 });
-app.on('before-quit', () => discord.disable());
+app.on('before-quit', () => { discord.disable(); stats.stop(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
@@ -788,6 +789,7 @@ handle('game:launch', async ({ taskId, instanceId }) => {
       send('game:exit', payload);
       presence.playing = false;
       presence.gameSince = null;
+      stats.stop();
       refreshPresence();
       if (win && !win.isDestroyed()) win.show();
       // код 0 — игру закрыли обычным способом; ненулевой означает вылет
@@ -799,6 +801,7 @@ handle('game:launch', async ({ taskId, instanceId }) => {
   presence.playing = true;
   presence.gameSince = Date.now();
   refreshPresence();
+  stats.start();                   // отмечаемся в счётчике игроков на сайте
 
   config.save({
     lastInstance: inst.id,

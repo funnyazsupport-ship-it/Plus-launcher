@@ -22,4 +22,8 @@ module.exports = {
 
   // Azure client id для входа по Microsoft (device code flow)
   msClientId: '00000000402b5328',
+
+  // Адрес счётчика игроков на сайте. Пусто — лаунчер никуда не отмечается.
+  // Скрипты лежат в docs/api и кладутся в public_html/api на хостинге.
+  statsUrl: 'https://plus-launcher.fun/api',
 };

@@ -1333,6 +1333,8 @@ function bindSettings() {
   $('#s-autocheck').addEventListener('change', (e) => save({ checkUpdatesOnStart: e.target.checked }));
   $('#s-ai').checked = cfg.aiCrashHelp !== false;
   $('#s-ai').addEventListener('change', (e) => save({ aiCrashHelp: e.target.checked }));
+  $('#s-stats').checked = cfg.shareStats !== false;
+  $('#s-stats').addEventListener('change', (e) => save({ shareStats: e.target.checked }));
   $('#s-check-update').addEventListener('click', () => checkUpdate(false));
   app.update.version().then((r) => { if (r.ok) $('#app-version').textContent = `v${r.data}`; });
 
