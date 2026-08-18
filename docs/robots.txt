@@ -1,0 +1,9 @@
+# Сайт открыт для всех поисковиков
+User-agent: *
+Allow: /
+
+# Папку с установщиками индексировать незачем: там бинарники, а не страницы
+Disallow: /downloads/
+Disallow: /api/
+
+Sitemap: https://plus-launcher.fun/sitemap.xml
