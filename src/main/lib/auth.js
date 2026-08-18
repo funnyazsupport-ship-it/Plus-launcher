@@ -89,7 +89,18 @@ async function xboxChain(msAccessToken) {
     throw e;
   }
 
-  const mc = await postJSON(MC_LOGIN, { identityToken: `XBL3.0 x=${uhs};${xsts.Token}` });
+  let mc;
+  try {
+    mc = await postJSON(MC_LOGIN, { identityToken: `XBL3.0 x=${uhs};${xsts.Token}` });
+  } catch (e) {
+    // Mojang не пускает приложения, не прошедшие у них проверку. Вход при этом
+    // выглядит исправным до самого конца, поэтому объясняем прямо.
+    if (e.status === 403 && /invalid app registration/i.test(JSON.stringify(e.data || ''))) {
+      throw new Error('Mojang пока не одобрил это приложение — вход по лицензии Microsoft заработает после проверки. '
+        + 'Пока пользуйтесь Ely.by или оффлайн-профилем.');
+    }
+    throw e;
+  }
 
   const ent = await getJSON(MC_ENTITLEMENTS, { Authorization: `Bearer ${mc.access_token}` }).catch(() => ({ items: [] }));
   if (!(ent.items || []).length) {

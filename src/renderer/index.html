@@ -264,24 +264,37 @@
 
     <!-- АККАУНТ -->
     <section class="page" id="page-account">
-      <div class="head"><div><h1>Аккаунт</h1><p class="dim">Лицензия Microsoft, Ely.by или оффлайн-профиль</p></div></div>
+      <div class="head"><div><h1>Аккаунт</h1><p class="dim">Ely.by или оффлайн-профиль</p></div></div>
+
+      <!--
+        Вход через Microsoft скрыт до одобрения приложения Mojang.
+        Проверено: Microsoft вход принимает и Xbox Live отвечает, а игровые
+        сервисы дают 403 «Invalid app registration» — так они отвечают всем
+        приложениям, не прошедшим проверку. Пока заявка не одобрена, кнопка
+        вела бы человека к ошибке на последнем шаге.
+
+        Всё остальное на месте и работает: auth.js, обработчик auth:login,
+        client id в app-config.js, обработчики #ms-* привязываются сами,
+        если панель есть в разметке. Чтобы вернуть — раскомментировать этот
+        блок и перенести оффлайн-профиль обратно в соседнюю колонку.
+
+      <div class="panel">
+        <div class="side-head"><span class="lbl">Лицензия Microsoft</span></div>
+        <p class="dim">Вход по коду устройства. Нужна купленная Minecraft: Java Edition — на аккаунтах без неё вход не пройдёт.</p>
+        <div id="ms-code-box" class="codebox" hidden>
+          <div class="code mono" id="ms-code">------</div>
+          <p class="dim">Браузер уже открыт с этим кодом — подтвердите вход там. Если страница не открылась, зайдите на <b class="mono" id="ms-url">microsoft.com/link</b> и введите код вручную.</p>
+          <div class="stack row">
+            <button class="btn" id="ms-open"><svg><use href="#i-link"/></svg>Открыть снова</button>
+            <button class="btn" id="ms-copy">Скопировать код</button>
+            <button class="btn" id="ms-cancel">Отмена</button>
+          </div>
+        </div>
+        <button class="btn accent" id="ms-login"><svg><use href="#i-user"/></svg>Войти через Microsoft</button>
+      </div>
+      -->
 
       <div class="two">
-        <div class="panel">
-          <div class="side-head"><span class="lbl">Лицензия Microsoft</span></div>
-          <p class="dim">Вход по коду устройства. Нужна купленная Minecraft: Java Edition — на аккаунтах без неё вход не пройдёт.</p>
-          <div id="ms-code-box" class="codebox" hidden>
-            <div class="code mono" id="ms-code">------</div>
-            <p class="dim">Браузер уже открыт с этим кодом — подтвердите вход там. Если страница не открылась, зайдите на <b class="mono" id="ms-url">microsoft.com/link</b> и введите код вручную.</p>
-            <div class="stack row">
-              <button class="btn" id="ms-open"><svg><use href="#i-link"/></svg>Открыть снова</button>
-              <button class="btn" id="ms-copy">Скопировать код</button>
-              <button class="btn" id="ms-cancel">Отмена</button>
-            </div>
-          </div>
-          <button class="btn accent" id="ms-login"><svg><use href="#i-user"/></svg>Войти через Microsoft</button>
-        </div>
-
         <div class="panel">
           <div class="side-head"><span class="lbl">Ely.by</span></div>
           <p class="dim">Бесплатные аккаунты со своими скинами и плащами. Работают на серверах, которые их поддерживают.</p>
@@ -295,13 +308,11 @@
           <p class="note" id="ely-note" hidden></p>
           <p class="dim">Нет аккаунта? <b class="lnk" id="ely-signup">Зарегистрироваться на ely.by</b></p>
         </div>
-      </div>
 
-      <div class="panel">
-        <div class="side-head"><span class="lbl">Оффлайн-профиль</span></div>
-        <p class="dim">Одиночная игра и сервера без лицензии. Скин можно поставить локально во вкладке «Скины».</p>
-        <div class="form-row">
-          <label class="f grow"><span class="lbl">Ник</span><input id="off-name" placeholder="Steve" maxlength="16" /></label>
+        <div class="panel">
+          <div class="side-head"><span class="lbl">Оффлайн-профиль</span></div>
+          <p class="dim">Одиночная игра и сервера без лицензии. Скин можно поставить локально во вкладке «Скины».</p>
+          <label class="f"><span class="lbl">Ник</span><input id="off-name" placeholder="Steve" maxlength="16" /></label>
           <button class="btn" id="off-add">Добавить</button>
         </div>
       </div>
