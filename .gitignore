@@ -3,6 +3,11 @@ dist/
 out/
 *.log
 
+# резервные копии и архивы папок — в репозиторий не нужны
+*.rar
+*.zip
+*.7z
+
 # вшитый ключ CurseForge — в репозиторий не попадает
 src/main/lib/embedded-key.js
 !build/icon.png
