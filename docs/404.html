@@ -6,26 +6,74 @@
 <title>Страница не найдена — Plus Launcher</title>
 <meta name="robots" content="noindex" />
 <link rel="icon" href="/img/favicon.png" />
-<link rel="stylesheet" href="/styles.css" />
 <meta name="theme-color" content="#0d0e11" />
 <style>
-  /* Страница короткая, поэтому подвал прижимаем вниз, а содержимое ставим по центру */
-  body { min-height: 100vh; display: flex; flex-direction: column; }
+  /*
+   * Стили встроены прямо сюда, а не подключены из styles.css.
+   * Страницу ошибки могут открыть по любому адресу и при любых поломках сервера —
+   * она обязана выглядеть прилично, даже если ни один сторонний файл не загрузился.
+   */
+  :root {
+    --bg: #0d0e11; --panel: #15171b; --panel-2: #1b1e23;
+    --line: #262a31; --line-2: #333842;
+    --text: #e7e9ee; --dim: #878d99;
+    --accent: #74c045; --accent-hi: #82cf51; --on-accent: #0c1c05;
+    --r: 3px; --mono: "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.6 "Segoe UI", system-ui, sans-serif;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  a { color: inherit; text-decoration: none; }
+  svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  .top {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    padding: 16px max(20px, 5vw); border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark { width: 24px; height: 24px; }
+  .brand-text { display: flex; align-items: baseline; gap: 6px; }
+  .brand-text b { font-size: 15px; letter-spacing: .06em; }
+  .brand-text i { font-style: normal; font-size: 11px; letter-spacing: .16em; color: var(--dim); }
+  .top nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .top nav a { padding: 7px 11px; font-size: 13.5px; color: var(--dim); border-radius: var(--r); }
+  .top nav a:hover { color: var(--text); background: var(--panel); }
+
   .lost { flex: 1; display: grid; place-items: center; padding: 72px max(20px, 5vw); text-align: center; }
   .lost-code { font-size: 84px; font-weight: 700; line-height: 1; color: var(--accent); letter-spacing: -.03em; }
-  .lost h1 { font-size: 26px; margin: 18px 0 10px; }
-  .lost p { color: var(--dim); max-width: 44ch; margin: 0 auto 26px; }
-  .lost .cta { justify-content: center; }
+  .lost h1 { font-size: 26px; font-weight: 650; margin: 18px 0 12px; }
+  .lost p { color: var(--dim); max-width: 44ch; margin: 0 auto 26px; font-size: 14.5px; }
   .lost-path {
     display: inline-block; margin-bottom: 22px; padding: 6px 12px; border-radius: var(--r);
     background: var(--panel); border: 1px solid var(--line); font-family: var(--mono);
     font-size: 12.5px; color: var(--dim); max-width: 90vw; overflow-wrap: anywhere;
   }
+  .cta { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px; padding: 13px 24px; border-radius: var(--r);
+    border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text);
+    font-weight: 600; font-size: 15px; cursor: pointer;
+  }
+  .btn:hover { background: #22262c; border-color: var(--line-2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.primary:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+
+  footer { padding: 28px max(20px, 5vw) 36px; border-top: 1px solid var(--line); }
+  .foot-note { font-size: 12px; color: var(--dim); }
+
+  @media (max-width: 560px) {
+    .lost-code { font-size: 62px; }
+    .btn { width: 100%; justify-content: center; }
+  }
 </style>
 </head>
 <body>
 
-<svg class="sprite" aria-hidden="true" style="position:absolute;width:0;height:0"><defs>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0"><defs>
   <symbol id="i-logo" viewBox="0 0 48 48">
     <path d="M24 4 44 15 24 26 4 15Z" fill="#8fd45a"/>
     <path d="M4 15 24 26v18L4 33Z" fill="#5da336"/>
@@ -47,6 +95,7 @@
     <a href="/#features">Возможности</a>
     <a href="/#install">Установка</a>
     <a href="/#faq">Вопросы</a>
+    <a href="https://t.me/dowuto" target="_blank" rel="noopener">Поддержка</a>
   </nav>
 </header>
 
@@ -68,10 +117,12 @@
 </footer>
 
 <script>
-  // Показываем адрес, по которому человек пришёл, — так проще заметить опечатку
+  // Показываем адрес, по которому человек пришёл, — так проще заметить опечатку.
+  // При открытии файла с диска пути нет, поэтому строку прячем.
   var box = document.getElementById('lost-path');
-  var path = location.pathname + location.search;
-  box.textContent = path.length > 90 ? path.slice(0, 90) + '…' : path;
+  var path = location.protocol === 'file:' ? '' : location.pathname + location.search;
+  if (path && path !== '/404.html') box.textContent = path.length > 90 ? path.slice(0, 90) + '…' : path;
+  else box.style.display = 'none';
 </script>
 </body>
 </html>
