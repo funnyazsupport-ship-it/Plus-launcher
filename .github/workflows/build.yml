@@ -37,6 +37,15 @@ jobs:
       - name: Установка зависимостей
         run: npm ci
 
+      - name: Тесты
+        run: npm test
+
+      # electron-builder сам такие пакеты собрать не может: rpm просит rpmbuild,
+      # pacman — bsdtar и fakeroot. На чистой ubuntu их нет.
+      - name: Инструменты для пакетов Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y rpm libarchive-tools fakeroot
+
       - name: Вшить ключи из секретов
         env:
           CURSEFORGE_KEY: ${{ secrets.CURSEFORGE_KEY }}

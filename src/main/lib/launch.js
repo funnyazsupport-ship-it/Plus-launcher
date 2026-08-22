@@ -9,6 +9,21 @@ const java = require('./java');
 
 const SEP = process.platform === 'win32' ? ';' : ':';
 
+/**
+ * На Windows игру запускаем через javaw.exe вместо java.exe.
+ *
+ * java.exe — консольная программа: запущенная своей группой процессов (а иначе
+ * игра не переживёт закрытие лаунчера), она открывает рядом чёрное окно консоли.
+ * javaw.exe — та же машина без консоли, и вывод в перехваченные трубы она отдаёт
+ * точно так же, так что лог игры в лаунчере остаётся на месте.
+ */
+function windowless(javaPath) {
+  if (process.platform !== 'win32') return javaPath;
+  if (/javaw\.exe$/i.test(javaPath)) return javaPath;
+  const alt = javaPath.replace(/java\.exe$/i, 'javaw.exe');
+  return alt !== javaPath && fs.existsSync(alt) ? alt : javaPath;
+}
+
 function flatten(args, features) {
   const out = [];
   for (const a of args || []) {
@@ -139,13 +154,25 @@ async function launch(opt, onEvent = () => {}) {
   onEvent('progress', { stage: 'Запуск Minecraft', percent: 95 });
   onEvent('log', `[launcher] ${javaPath}\n[launcher] mainClass=${v.mainClass} libs=${classpath.length}`);
 
-  // detached на Unix даёт игре свою группу процессов: игра поднимает второй java,
-  // и убить её потом можно только всей группой разом (на Windows это делает taskkill /T).
-  const child = spawn(javaPath, args, {
+  /*
+   * detached нужен на всех системах, и по двум причинам сразу.
+   *
+   * Первая: игра должна пережить закрытие лаунчера. Без этого она умирает
+   * вместе с ним — проверено, дочерний процесс не доживает и до второй секунды.
+   * Обрыв stdout игре не страшен: System.out в Java — это PrintStream,
+   * он ошибки записи молча глотает, а не роняет программу.
+   *
+   * Вторая: своя группа процессов. Игра поднимает второй java, и убить её
+   * потом можно только всей группой разом (на Windows это делает taskkill /T).
+   */
+  const exe = windowless(javaPath);
+  const child = spawn(exe, args, {
     cwd: gameDir,
-    windowsHide: false,
-    detached: process.platform !== 'win32',
+    windowsHide: true,
+    detached: true,
   });
+  // лаунчер не должен ждать игру при выходе — она живёт сама по себе
+  child.unref();
   child.stdout.on('data', (d) => onEvent('log', d.toString()));
   child.stderr.on('data', (d) => onEvent('log', d.toString()));
   child.on('error', (e) => onEvent('log', `[error] ${e.message}`));

@@ -77,8 +77,17 @@ const AGENT_SYSTEM = `Ты — встроенный помощник лаунч�
 версии, моды, загрузчики, оптимизация, шейдеры, сервера, ошибки и железо.
 
 Отвечай по-русски, дружелюбно и по делу. Коротко — когда вопрос простой; подробно и по шагам —
-когда человек просит настроить или починить. Без markdown-заголовков и без таблиц,
-списки — дефисами или цифрами.
+когда человек просит настроить или починить.
+
+Оформление — markdown, лаунчер его показывает как надо:
+— **жирным** выделяй названия модов, кнопок и вкладок;
+— пошаговые инструкции — нумерованным списком, перечисления — дефисами;
+— \`обратными кавычками\` — имена файлов, папок и аргументы вроде \`-Xmx4G\`;
+— блок из трёх обратных кавычек — если даёшь строку аргументов или содержимое файла целиком;
+— таблицей — только когда сравниваешь несколько вариантов по одинаковым признакам;
+— заголовки ## — только в длинном ответе с несколькими разделами, в коротком они лишние.
+Не начинай ответ с заголовка и не оформляй каждую фразу списком — разметка нужна там,
+где она помогает читать, а не ради красоты.
 
 ${MC_FACTS}
 
@@ -127,19 +136,38 @@ async function readCrashReport(gameDir) {
   } catch { return null; }
 }
 
-/** Разбирает ответ DeepSeek и переводит ошибки сервиса на человеческий язык */
-async function ask(messages, { temperature = 0.3, maxTokens = 900, what = 'Сервис' } = {}) {
+// Запросы, которые сейчас в полёте: по ним работает кнопка «Стоп» в помощнике.
+// Ждать ответа до конца незачем — человек уже решил, что ответ ему не нужен.
+const inflight = new Set();
+
+/** Обрывает все текущие запросы к сервису. Возвращает, сколько оборвалось. */
+function cancel() {
+  const n = inflight.size;
+  for (const ac of inflight) {
+    ac.byUser = true;          // чтобы обрыв не выдали за таймаут сервиса
+    ac.abort();
+  }
+  inflight.clear();
+  return n;
+}
+
+/** Один запрос к сервису. Возвращает сообщение целиком — в нём может быть запрос инструмента. */
+async function askRaw(messages, { temperature = 0.3, maxTokens = 900, what = 'Сервис', tools = null } = {}) {
   const key = embeddedKey('deepseek');
   if (!key) throw new Error(`${what} недоступен: в сборке нет ключа`);
 
+  const body = { model: MODEL, temperature, max_tokens: maxTokens, messages };
+  if (tools) body.tools = tools;
+
   const ac = new AbortController();
+  inflight.add(ac);
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       signal: ac.signal,
-      body: JSON.stringify({ model: MODEL, temperature, max_tokens: maxTokens, messages }),
+      body: JSON.stringify(body),
     });
     const raw = await res.text();
     if (!res.ok) {
@@ -147,17 +175,32 @@ async function ask(messages, { temperature = 0.3, maxTokens = 900, what = 'Се�
       if (res.status === 401) throw new Error(`${what}: ключ не принят`);
       if (res.status === 402) throw new Error(`${what}: на аккаунте закончились средства`);
       if (res.status === 429) throw new Error(`${what}: слишком много запросов, попробуйте через минуту`);
-      throw new Error(`${what} ответил ошибкой ${res.status}`);
+      // 400 обычно значит битую переписку (например, ответили не на все вызовы
+      // инструментов) — без пояснения сервиса такое не отладить
+      const detail = (() => {
+        try { return JSON.parse(raw).error?.message || ''; } catch { return ''; }
+      })();
+      throw new Error(`${what} ответил ошибкой ${res.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
     }
-    const text = JSON.parse(raw).choices?.[0]?.message?.content?.trim();
-    if (!text) throw new Error(`${what}: пустой ответ`);
-    return text;
+    const msg = JSON.parse(raw).choices?.[0]?.message;
+    if (!msg) throw new Error(`${what}: пустой ответ`);
+    return msg;
   } catch (e) {
+    if (ac.byUser) throw new Error('Остановлено');
     if (ac.signal.aborted) throw new Error(`${what} не ответил вовремя`);
     throw e;
   } finally {
     clearTimeout(timer);
+    inflight.delete(ac);
   }
+}
+
+/** Разбирает ответ DeepSeek и переводит ошибки сервиса на человеческий язык */
+async function ask(messages, opts = {}) {
+  const msg = await askRaw(messages, opts);
+  const text = msg.content?.trim();
+  if (!text) throw new Error(`${opts.what || 'Сервис'}: пустой ответ`);
+  return text;
 }
 
 /**
@@ -207,25 +250,229 @@ async function explainCrash({ log = '', gameDir = '', instance = {}, exitCode = 
   }
 }
 
+/*
+ * Инструменты помощника. Читающие выполняются сразу, меняющие — только после
+ * подтверждения человеком в окне помощника (спрашивает renderer, см. agent.js).
+ * Модель не может поставить мод «по памяти»: id берётся из результата search_mods,
+ * то есть из настоящего ответа Modrinth или CurseForge.
+ */
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'list_instances',
+      description: 'Список сборок пользователя: id, название, версия Minecraft, загрузчик.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_installed_mods',
+      description: 'Что уже установлено в сборке. Вызывай перед советом, чтобы не предлагать имеющееся.',
+      parameters: {
+        type: 'object',
+        properties: {
+          instance_id: { type: 'string', description: 'id сборки из list_instances' },
+          kind: { type: 'string', enum: ['mod', 'resourcepack', 'shader', 'datapack'] },
+        },
+        required: ['instance_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_mods',
+      description: 'Поиск по Modrinth и CurseForge. Обязателен перед install_mod: '
+        + 'оттуда берутся source и project_id, выдумывать их нельзя.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'название или ключевые слова' },
+          instance_id: { type: 'string', description: 'сузить выдачу до версии и загрузчика этой сборки' },
+          mc: { type: 'string', description: 'версия Minecraft. Указывай её, когда подбираешь моды '
+            + 'для будущей сборки, которой ещё нет — иначе найдётся мод не под ту версию' },
+          loader: { type: 'string', enum: ['fabric', 'quilt', 'forge', 'neoforge'] },
+          kind: { type: 'string', enum: ['mod', 'resourcepack', 'shader', 'datapack'] },
+          limit: { type: 'integer', description: 'сколько результатов вернуть, максимум 10' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_instance',
+      description: 'Создать новую сборку: скачивает версию игры и загрузчик. '
+        + 'Требует подтверждения пользователя. Версию загрузчика лаунчер подбирает сам.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'название сборки для списка' },
+          mc: { type: 'string', description: 'версия Minecraft, например 1.20.1' },
+          loader: { type: 'string', enum: ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge'] },
+        },
+        required: ['mc'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_modpacks',
+      description: 'Поиск готовых модпаков на Modrinth и CurseForge. '
+        + 'Обязателен перед install_modpack — оттуда берутся source и project_id.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'название или тема: технический, магия, выживание' },
+          mc: { type: 'string', description: 'версия Minecraft, если пользователь её назвал' },
+          loader: { type: 'string', enum: ['fabric', 'quilt', 'forge', 'neoforge'] },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'install_modpack',
+      description: 'Установить готовый модпак: создаёт новую сборку, ставит версию, загрузчик, '
+        + 'все моды и настройки автора. Требует подтверждения пользователя. '
+        + 'source и project_id брать только из ответа search_modpacks.',
+      parameters: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', enum: ['modrinth', 'curseforge'] },
+          project_id: { type: 'string', description: 'id из результата search_modpacks' },
+          name: { type: 'string', description: 'название модпака — показывается пользователю' },
+        },
+        required: ['source', 'project_id', 'name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'build_modpack',
+      description: 'Собрать свою сборку под задачу: создаёт сборку и ставит в неё сразу весь набор модов. '
+        + 'Требует одного подтверждения на всё. Используй, когда просят «собери сборку на …» — '
+        + 'это лучше, чем ставить моды по одному. Каждый мод сперва найди через search_mods.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'название сборки' },
+          mc: { type: 'string', description: 'версия Minecraft, например 1.20.1' },
+          loader: { type: 'string', enum: ['fabric', 'quilt', 'forge', 'neoforge'] },
+          mods: {
+            type: 'array',
+            description: 'моды из ответов search_mods, от 1 до 20 штук',
+            items: {
+              type: 'object',
+              properties: {
+                source: { type: 'string', enum: ['modrinth', 'curseforge'] },
+                project_id: { type: 'string' },
+                name: { type: 'string' },
+              },
+              required: ['source', 'project_id', 'name'],
+            },
+          },
+        },
+        required: ['name', 'mc', 'loader', 'mods'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'install_mod',
+      description: 'Установить мод в сборку. Требует подтверждения пользователя. '
+        + 'source и project_id брать только из ответа search_mods. Зависимости ставятся сами.',
+      parameters: {
+        type: 'object',
+        properties: {
+          instance_id: { type: 'string', description: 'id сборки из list_instances' },
+          source: { type: 'string', enum: ['modrinth', 'curseforge'] },
+          project_id: { type: 'string', description: 'id из результата search_mods' },
+          name: { type: 'string', description: 'название мода — показывается пользователю в запросе' },
+          kind: { type: 'string', enum: ['mod', 'resourcepack', 'shader', 'datapack'] },
+        },
+        required: ['instance_id', 'source', 'project_id', 'name'],
+      },
+    },
+  },
+];
+
+const ACTIONS_HINT = `
+Ты умеешь не только советовать, но и делать: собирать сборки и ставить моды через инструменты.
+
+Что выбрать под просьбу:
+— «Собери сборку на технику / магию / выживание / оптимизацию», «сделай сборку с модами» —
+  подбери моды сам, найди каждый через search_mods и поставь одним build_modpack.
+  Не ставь их по одному: пользователю придётся жать «Разрешить» на каждый.
+— «Поставь готовый модпак», «хочу популярную сборку» — search_modpacks, затем install_modpack.
+— «Поставь такой-то мод» в существующую сборку — search_mods, затем install_mod.
+— «Создай пустую сборку 1.20.1» без модов — create_instance.
+
+Общие правила:
+— source и project_id бери только из ответов search_mods и search_modpacks. Придуманный id
+  установку сорвёт. Ни одного мода «по памяти».
+— Собирая сборку сам, бери 5–12 модов: базовый API загрузчика подтянется сам, его добавлять не надо.
+  Для Fabric основа — Sodium, Lithium, FerriteCore; для Forge и NeoForge — Embeddium, FerriteCore.
+— Перед советом посмотри list_instances, а на вопрос «что у меня стоит» — list_installed_mods.
+— Меняющие действия лаунчер покажет пользователю на подтверждение. Отказался — не уговаривай
+  и не повторяй то же самое, предложи другой путь.
+— Не делай того, о чём не просили.
+— После установки коротко скажи, что вышло. Если часть модов не встала — назови их честно,
+  не делай вид, что всё прошло гладко.
+
+Не ходи по кругу:
+— Ищи все моды будущей сборки одним заходом — вызови search_mods сразу для каждого названия,
+  а не по одному в несколько приёмов.
+— Не повторяй запрос, который уже делал: ответ будет тот же. Пустая выдача значит, что мода
+  нет под эту версию и загрузчик, — возьми другой мод, а не то же название иначе написанным.
+— Если после двух-трёх попыток не выходит, остановись и скажи словами, что именно не получилось
+  и что можно сделать. Честный ответ лучше бесконечных поисков.`;
+
 /**
  * Свободный разговор с помощником.
- * @param {Array<{role:'user'|'assistant', content:string}>} messages
+ * Возвращает либо готовый ответ, либо запрос инструментов — их выполняет окно помощника.
+ * @param {Array<{role:string, content:string}>} messages
+ * @returns {Promise<{text: string, toolCalls: Array}>}
  */
-async function chat(messages, { context = '' } = {}) {
-  const history = (messages || []).slice(-20).map((m) => ({
-    role: m.role === 'assistant' ? 'assistant' : 'user',
-    content: String(m.content).slice(0, 6000),
-  }));
+async function chat(messages, { context = '', allowActions = false } = {}) {
+  const history = (messages || []).slice(-30).map((m) => {
+    // ответ инструмента возвращается модели как есть — по нему она поймёт, что вышло
+    if (m.role === 'tool') {
+      return { role: 'tool', tool_call_id: m.tool_call_id, content: String(m.content).slice(0, 6000) };
+    }
+    if (m.role === 'assistant') {
+      const out = { role: 'assistant', content: String(m.content || '').slice(0, 6000) };
+      if (m.tool_calls?.length) out.tool_calls = m.tool_calls;
+      return out;
+    }
+    return { role: 'user', content: String(m.content).slice(0, 6000) };
+  });
 
-  const system = AGENT_SYSTEM + (context ? `\n\nЧто сейчас открыто в лаунчере:\n${context}` : '');
-  const text = await ask([{ role: 'system', content: system }, ...history], {
+  const system = AGENT_SYSTEM
+    + (allowActions ? ACTIONS_HINT : '')
+    + (context ? `\n\nЧто сейчас открыто в лаунчере:\n${context}` : '');
+
+  const msg = await askRaw([{ role: 'system', content: system }, ...history], {
     temperature: 0.5,
     maxTokens: 1200,
     what: 'Помощник',
+    tools: allowActions ? TOOLS : null,
   });
-  return { text };
+
+  const toolCalls = (msg.tool_calls || []).filter((c) => c?.function?.name);
+  const text = (msg.content || '').trim();
+  if (!text && !toolCalls.length) throw new Error('Помощник: пустой ответ');
+  return { text, toolCalls };
 }
 
 const available = () => Boolean(embeddedKey('deepseek'));
 
-module.exports = { explainCrash, chat, available, anonymize, squeezeLog };
+module.exports = { explainCrash, chat, available, cancel, anonymize, squeezeLog };

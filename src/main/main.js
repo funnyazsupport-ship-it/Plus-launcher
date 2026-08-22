@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
@@ -16,6 +16,7 @@ const ely = require('./lib/ely');
 const mods = require('./lib/mods');
 const modUpdates = require('./lib/mod-updates');
 const modpacks = require('./lib/modpacks');
+const packfile = require('./lib/packfile');
 const backups = require('./lib/backups');
 const cleanup = require('./lib/cleanup');
 const stats = require('./lib/presence-stats');
@@ -24,6 +25,7 @@ const storage = require('./lib/storage');
 const updater = require('./lib/updater');
 const discord = require('./lib/discord');
 const ai = require('./lib/ai');
+const chats = require('./lib/chats');
 const mirrors = require('./lib/mirrors');
 const connectivity = require('./lib/connectivity');
 const appConfig = require('./lib/app-config');
@@ -116,6 +118,60 @@ function createWindow() {
       console.log(`[renderer:${level}] ${message} (${String(source).split('/').pop()}:${line})`));
   }
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+
+  /*
+   * Крестик прячет лаунчер в трей, а не закрывает его. Игра к этому моменту
+   * может идти: свёрнутый лаунчер продолжает вести журнал, показывает разбор
+   * вылета и умеет остановить игру. Выйти совсем — через меню значка в трее.
+   */
+  win.on('close', (e) => {
+    if (quitting || !tray) return;      // трея нет — прятать некуда, закрываемся
+    e.preventDefault();
+    win.hide();
+  });
+}
+
+// ---------- значок в трее ----------
+
+let tray = null;
+let quitting = false;                 // отличает «спрятать» от настоящего выхода
+
+function showWindow() {
+  if (!win || win.isDestroyed()) { createWindow(); return; }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+/*
+ * Значок у часов. Всё внутри обёрнуто в try: в Linux область уведомлений есть
+ * не в каждой оболочке (в GNOME её убрали, где-то нужен libappindicator), и там
+ * создание значка падает с ошибкой. Ронять из-за этого весь лаунчер нельзя —
+ * без трея он просто закрывается крестиком, как раньше.
+ */
+function createTray() {
+  try {
+    // Картинка лежит рядом с кодом, а не в build: в собранный пакет попадает
+    // только src, и значок из build там просто не нашёлся бы.
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'tray.png'));
+    if (icon.isEmpty()) {
+      console.warn('[tray] значок не найден, работаем без трея');
+      return;
+    }
+    tray = new Tray(icon.resize({ width: 16, height: 16 }));
+    tray.setToolTip('Plus Launcher');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Открыть лаунчер', click: showWindow },
+      { type: 'separator' },
+      { label: 'Выйти', click: () => { quitting = true; app.quit(); } },
+    ]));
+    // в Linux по одиночному клику меню открывает сама оболочка, вешаем только двойной
+    tray.on('double-click', showWindow);
+    if (process.platform === 'win32') tray.on('click', showWindow);
+  } catch (e) {
+    tray = null;
+    console.warn('[tray] область уведомлений недоступна:', e.message);
+  }
 }
 
 /**
@@ -128,17 +184,72 @@ function rememberDataDir() {
     (e) => { if (e) console.warn('[reg]', e.message); });
 }
 
-app.whenReady().then(() => {
-  createWindow();
-  applyDiscord();
-  rememberDataDir();
+/*
+ * Открытие файла .plusmodpack двойным кликом.
+ *
+ * Система запускает лаунчер, передавая путь к файлу аргументом. Второй экземпляр
+ * при этом не нужен: он занял бы ту же папку данных и перетёр конфиг, поэтому
+ * держим блокировку и передаём путь уже запущенному окну.
+ */
+let pendingPack = null;          // файл, пришедший до того, как окно готово
+
+/** Достаёт путь к файлу сборки из аргументов командной строки */
+function packFromArgv(argv) {
+  return (argv || []).slice(1).find((a) => packfile.isPackFile(a)) || null;
+}
+
+function offerPack(file) {
+  if (!file) return;
+  if (!win || win.isDestroyed() || win.webContents.isLoading()) { pendingPack = file; return; }
+  if (win.isMinimized()) win.restore();
+  win.focus();
+  send('packfile:open', { file });
+}
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', (_e, argv) => {
+    // лаунчер уже запущен — возможно, спрятан в трее. Показываем его,
+    // иначе повторный запуск выглядел бы так, будто ничего не произошло.
+    showWindow();
+    offerPack(packFromArgv(argv));
+  });
+  // macOS передаёт открытый файл не аргументом, а событием
+  app.on('open-file', (e, file) => { e.preventDefault(); offerPack(file); });
+
+  app.whenReady().then(() => {
+    createWindow();
+    createTray();
+    applyDiscord();
+    rememberDataDir();
+    pendingPack = packFromArgv(process.argv);
+    win.webContents.once('did-finish-load', () => {
+      if (pendingPack) { offerPack(pendingPack); pendingPack = null; }
+    });
+  });
+}
+app.on('before-quit', () => { quitting = true; discord.disable(); stats.stop(); });
+// Окно спрятано в трей — это не повод закрывать программу: выход только через
+// меню значка, иначе лаунчер исчезал бы сразу после нажатия на крестик.
+app.on('window-all-closed', () => {
+  // Живём в трее. Но если значка нет, прятаться некуда: без этого остался бы
+  // невидимый процесс, который нечем завершить.
+  if (!tray && process.platform !== 'darwin') app.quit();
 });
-app.on('before-quit', () => { discord.disable(); stats.stop(); });
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
 function send(channel, payload) { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); }
-const progress = (taskId) => (p) => send('progress', { taskId, ...p });
+
+// помощник живёт в отдельном окне, чтобы не мешать игре и лаунчеру
+let agentWin = null;
+
+/** Прогресс нужен обоим окнам: помощник тоже умеет ставить моды и должен показывать ход */
+function broadcast(channel, payload) {
+  send(channel, payload);
+  if (agentWin && !agentWin.isDestroyed()) agentWin.webContents.send(channel, payload);
+}
+const progress = (taskId) => (p) => broadcast('progress', { taskId, ...p });
 
 function handle(name, fn) {
   ipcMain.handle(name, async (_e, ...args) => {
@@ -686,6 +797,39 @@ handle('skins:applyLocal', async ({ instanceId, file, variant }) => {
 
 handle('skins:installMod', ({ taskId, instanceId }) => skins.installLoaderMod(instanceId, progress(taskId)));
 
+// ---------- файл сборки .plusmodpack ----------
+
+handle('packfile:export', async ({ taskId, instanceId }) => {
+  const inst = config.load().instances.find((i) => i.id === instanceId);
+  const r = await dialog.showSaveDialog(win, {
+    title: 'Куда сохранить сборку',
+    defaultPath: `${folderName(inst?.name || 'сборка')}${packfile.EXT}`,
+    filters: [{ name: 'Сборка Plus Launcher', extensions: [packfile.EXT.slice(1)] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  return packfile.write(instanceId, r.filePath, progress(taskId));
+});
+
+handle('packfile:pick', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Выберите файл сборки',
+    properties: ['openFile'],
+    filters: [{ name: 'Сборка Plus Launcher', extensions: [packfile.EXT.slice(1)] }],
+  });
+  if (r.canceled || !r.filePaths[0]) return null;
+  return { file: r.filePaths[0], pack: await packfile.read(r.filePaths[0]) };
+});
+
+handle('packfile:read', async (file) => packfile.read(file));
+
+handle('packfile:install', ({ taskId, file, name }) => (async () => {
+  const pack = await packfile.read(file);
+  return packfile.install(pack, { name, createInstance }, progress(taskId));
+})());
+
+handle('skins:gallery', (order) => skins.gallery(order));
+handle('skins:importUrl', (link) => skins.importFromUrl(link));
+
 // ---------- разбор вылетов ----------
 
 const LOG_LINES = 600;
@@ -720,10 +864,24 @@ async function explainLastCrash(exitCode) {
 }
 
 handle('ai:available', () => ai.available());
-handle('ai:chat', ({ messages, context }) => ai.chat(messages, { context }));
+// Инструменты помощнику даём, только если это разрешено в настройках.
+// Renderer сюда не решает: флаг читается из конфига здесь.
+// noTools приходит из окна помощника и умеет только отнимать право на действия,
+// но не выдавать его: разрешение всё равно решается настройкой здесь.
+handle('ai:chat', ({ messages, context, noTools }) =>
+  ai.chat(messages, {
+    context,
+    allowActions: !noTools && config.load().aiActions !== false,
+  }));
+handle('ai:cancel', () => ai.cancel());
 
-// помощник живёт в отдельном окне, чтобы не мешать игре и лаунчеру
-let agentWin = null;
+// ---------- история переписок с помощником ----------
+handle('chats:list', () => chats.list());
+handle('chats:read', (id) => chats.read(id));
+handle('chats:save', ({ id, messages }) => chats.save(id, messages));
+handle('chats:remove', (id) => chats.remove(id));
+handle('chats:clear', () => chats.clear());
+
 handle('ai:openAgent', () => {
   if (agentWin && !agentWin.isDestroyed()) { agentWin.focus(); return true; }
   agentWin = new BrowserWindow({
@@ -741,6 +899,12 @@ handle('ai:openAgent', () => {
     },
   });
   agentWin.loadFile(path.join(__dirname, '..', 'renderer', 'agent.html'));
+  // ссылки из ответов уходят в системный браузер: окно помощника должно
+  // остаться помощником, а не превратиться во встроенный браузер
+  agentWin.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  agentWin.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('file://')) { e.preventDefault(); shell.openExternal(url); }
+  });
   agentWin.on('closed', () => { agentWin = null; });
   return true;
 });

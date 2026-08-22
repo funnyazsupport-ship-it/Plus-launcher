@@ -84,6 +84,10 @@ contextBridge.exposeInMainWorld('api', {
     remove: (instance, file, kind) => invoke('mods:remove', instance, file, kind),
     folder: (instance, kind) => invoke('mods:folder', instance, kind),
     installPack: (opts) => invoke('packs:install', opts),
+    exportFile: (opts) => invoke('packfile:export', opts),
+    pickFile: () => invoke('packfile:pick'),
+    readFile: (file) => invoke('packfile:read', file),
+    installFile: (opts) => invoke('packfile:install', opts),
     updates: (opts) => invoke('mods:updates', opts),
     applyUpdates: (opts) => invoke('mods:applyUpdates', opts),
     checkApi: (instanceId) => invoke('mods:checkApi', instanceId),
@@ -110,12 +114,21 @@ contextBridge.exposeInMainWorld('api', {
     cape: (capeId) => invoke('skins:cape', capeId),
     applyLocal: (opts) => invoke('skins:applyLocal', opts),
     installMod: (opts) => invoke('skins:installMod', opts),
+    gallery: (order) => invoke('skins:gallery', order),
+    importUrl: (link) => invoke('skins:importUrl', link),
   },
   ai: {
     available: () => invoke('ai:available'),
     explain: () => invoke('ai:explain'),
     chat: (opts) => invoke('ai:chat', opts),
+    cancel: () => invoke('ai:cancel'),
     openAgent: () => invoke('ai:openAgent'),
+    // история переписок
+    chats: () => invoke('chats:list'),
+    chatRead: (id) => invoke('chats:read', id),
+    chatSave: (opts) => invoke('chats:save', opts),
+    chatRemove: (id) => invoke('chats:remove', id),
+    chatsClear: () => invoke('chats:clear'),
   },
   game: {
     launch: (opts) => invoke('game:launch', opts),
@@ -123,7 +136,7 @@ contextBridge.exposeInMainWorld('api', {
     running: () => invoke('game:running'),
   },
   on: (channel, cb) => {
-    const allowed = ['progress', 'auth:code', 'game:log', 'game:exit', 'game:crash', 'discord:status'];
+    const allowed = ['progress', 'auth:code', 'game:log', 'game:exit', 'game:crash', 'discord:status', 'packfile:open'];
     if (!allowed.includes(channel)) return () => {};
     const listener = (_e, payload) => cb(payload);
     ipcRenderer.on(channel, listener);

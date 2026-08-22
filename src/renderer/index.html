@@ -52,7 +52,12 @@
 <header class="topbar">
   <div class="brand">
     <svg class="brand-mark"><use href="#i-logo"/></svg>
-    <div class="brand-text"><b>PLUS</b><span>LAUNCHER</span></div>
+    <!-- Адрес сайта под названием: видно, откуда настоящий лаунчер.
+         Текст подставляется из настроек сборки, чтобы не расходился с ссылкой. -->
+    <div class="brand-text">
+      <div class="brand-row"><b>PLUS</b><span>LAUNCHER</span></div>
+      <span class="brand-site" id="brand-site">plus-launcher.fun</span>
+    </div>
   </div>
   <div class="drag"></div>
   <div class="winctl">
@@ -241,6 +246,26 @@
           <p class="note" id="skin-fetch-note" hidden></p>
 
           <div class="divider"></div>
+          <div class="side-head"><span class="lbl">Каталог скинов</span></div>
+          <p class="dim">Подборка с Laby.net прямо тут. Полную галерею с тегами и поиском удобнее смотреть на самом сайте — оттуда же можно вставить ссылку на понравившийся скин.</p>
+          <div class="form-row">
+            <label class="f"><span class="lbl">Сортировка</span>
+              <select id="gallery-order">
+                <option value="most_used">Популярные</option>
+                <option value="latest">Только что загруженные</option>
+              </select>
+            </label>
+            <button class="btn" id="gallery-load"><svg><use href="#i-refresh"/></svg>Показать</button>
+            <button class="btn" id="gallery-namemc"><svg><use href="#i-link"/></svg>Открыть NameMC</button>
+          </div>
+          <div class="skin-grid" id="skin-gallery"></div>
+          <div class="form-row">
+            <label class="f grow"><span class="lbl">Ссылка на скин (NameMC или Laby.net)</span><input id="skin-url" placeholder="https://namemc.com/skin/..." /></label>
+            <button class="btn accent" id="skin-url-import"><svg><use href="#i-download"/></svg>Импорт</button>
+          </div>
+          <p class="note" id="skin-url-note" hidden></p>
+
+          <div class="divider"></div>
           <div class="side-head"><span class="lbl">Библиотека</span><span class="count mono" id="skin-count">0</span></div>
           <div class="skin-grid" id="skin-library"></div>
 
@@ -267,23 +292,34 @@
       <div class="head"><div><h1>Аккаунт</h1><p class="dim">Ely.by или оффлайн-профиль</p></div></div>
 
       <!--
-        Вход через Microsoft скрыт до одобрения приложения Mojang.
-        Проверено: Microsoft вход принимает и Xbox Live отвечает, а игровые
-        сервисы дают 403 «Invalid app registration» — так они отвечают всем
-        приложениям, не прошедшим проверку. Пока заявка не одобрена, кнопка
-        вела бы человека к ошибке на последнем шаге.
+        Вход по лицензии Microsoft. Mojang заявку на appID рассмотрел, поэтому
+        кнопка на месте. Если вход обрывается на шаге согласия Microsoft
+        («users are not permitted to consent to first party applications»), дело
+        не в настройках приложения: разрешение XboxLive.signin принадлежит
+        Xbox Live, и приложению нужно предварительное разрешение с их стороны.
+        Настройки в Azure проверены: тип учётных записей — только личные,
+        потоки общедоступных клиентов включены.
+      -->
+      <!--
+        Вход по лицензии Microsoft скрыт: упирается в Microsoft, а не в Mojang.
 
-        Всё остальное на месте и работает: auth.js, обработчик auth:login,
-        client id в app-config.js, обработчики #ms-* привязываются сами,
-        если панель есть в разметке. Чтобы вернуть — раскомментировать этот
-        блок и перенести оффлайн-профиль обратно в соседнюю колонку.
+        Разрешение XboxLive.signin принадлежит Xbox Live, и обычный пользователь
+        согласие на него дать не может — «users are not permitted to consent to
+        first party applications». Приложению нужно предварительное разрешение
+        со стороны Xbox. Проверено опытом: на одинаковый запрос наш client id
+        отвечает ошибкой, а id работающего лаунчера — нет, значит настройки Azure
+        ни при чём (там тоже всё проверено: только личные учётные записи,
+        потоки общедоступных клиентов включены).
+
+        Следить за состоянием: npm run check-ms — покажет, выдали разрешение или нет.
+        Чтобы вернуть кнопку: раскомментировать блок ниже и заменить two на three.
 
       <div class="panel">
         <div class="side-head"><span class="lbl">Лицензия Microsoft</span></div>
         <p class="dim">Вход по коду устройства. Нужна купленная Minecraft: Java Edition — на аккаунтах без неё вход не пройдёт.</p>
         <div id="ms-code-box" class="codebox" hidden>
           <div class="code mono" id="ms-code">------</div>
-          <p class="dim">Браузер уже открыт с этим кодом — подтвердите вход там. Если страница не открылась, зайдите на <b class="mono" id="ms-url">microsoft.com/link</b> и введите код вручную.</p>
+          <p class="dim">Код скопирован, браузер открыт — вставьте код на странице и подтвердите вход. Если страница не открылась, зайдите на <b class="mono" id="ms-url">microsoft.com/link</b> сами.</p>
           <div class="stack row">
             <button class="btn" id="ms-open"><svg><use href="#i-link"/></svg>Открыть снова</button>
             <button class="btn" id="ms-copy">Скопировать код</button>
@@ -403,6 +439,8 @@
         <div class="divider"></div>
         <label class="check"><input type="checkbox" id="s-ai" /><span>Разбирать вылеты игры через ИИ</span></label>
         <p class="dim">Если игра закрылась с ошибкой, лаунчер отправляет её лог в DeepSeek и показывает, в чём причина. Имя пользователя Windows из лога вырезается.</p>
+        <label class="check"><input type="checkbox" id="s-ai-actions" /><span>Разрешить помощнику создавать сборки и ставить моды</span></label>
+        <p class="dim">Помощник сможет сам найти мод и установить его. Каждое такое действие он всё равно показывает отдельно, и без вашего «Разрешить» ничего не скачается. Снимите галочку — и он сможет только советовать.</p>
         <p class="note" id="update-note" hidden></p>
       </div>
 
@@ -597,6 +635,14 @@
 
       <div class="divider"></div>
       <div class="side-head">
+        <span class="lbl">Поделиться сборкой</span>
+        <button class="btn sm" id="ic-export"><svg><use href="#i-download"/></svg>Сохранить в файл</button>
+      </div>
+      <p class="dim">Получится небольшой файл .plusmodpack со списком модов — сами моды в него не кладутся, они скачаются при установке. Такой файл можно отправить другу: если у него стоит Plus Launcher, двойной клик предложит поставить эту сборку.</p>
+      <p class="note" id="ic-export-note" hidden></p>
+
+      <div class="divider"></div>
+      <div class="side-head">
         <span class="lbl">Резервные копии миров</span>
         <button class="btn sm" id="ic-bk-folder"><svg><use href="#i-folder"/></svg>Папка копий</button>
       </div>
@@ -616,6 +662,28 @@
       <div class="form-row right">
         <button class="btn" id="ic-cancel">Отмена</button>
         <button class="btn accent" id="ic-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Открыли файл .plusmodpack: показываем состав и спрашиваем, ставить ли -->
+<div class="modal" id="pack-open" hidden>
+  <div class="modal-box narrow">
+    <div class="modal-top">
+      <h3>Установить сборку?</h3>
+      <button class="ico-btn" id="po-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p class="dim">Файл сборки открыт в лаунчере. Моды скачаются из каталога — файл содержит только их список.</p>
+      <label class="f grow"><span class="lbl">Название сборки</span><input id="po-name" /></label>
+      <p class="mono dim" id="po-about">—</p>
+      <div class="side-head"><span class="lbl">Что поставится</span><span class="count mono" id="po-count">0</span></div>
+      <div class="side-list" id="po-mods"></div>
+      <p class="note" id="po-note" hidden></p>
+      <div class="form-row right">
+        <button class="btn" id="po-cancel">Не надо</button>
+        <button class="btn accent" id="po-install"><svg><use href="#i-download"/></svg>Установить</button>
       </div>
     </div>
   </div>

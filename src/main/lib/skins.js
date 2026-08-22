@@ -182,6 +182,99 @@ async function downloadOwn(account) {
   return downloadByName(account?.name);
 }
 
+// ---------------- каталог скинов: NameMC / Laby.net ----------------
+
+// Прямая ссылка на PNG-текстуру. NameMC отдаёт её только с обычным
+// браузерным заголовком и Referer — без них CDN возвращает 403.
+const NAMEMC_TEXTURE = (id) => `https://s.namemc.com/i/${id}.png`;
+// У Laby та же текстура по умолчанию отдаётся в WebP (сжатие для сайта) —
+// ?format=png заставляет вернуть настоящий PNG, который понимает игра.
+const LABY_TEXTURE = (hash) => `https://laby.net/texture/${hash}.png?format=png`;
+const LABY_SEARCH = 'https://laby.net/api/v3/search/textures/skin';
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Laby знает ровно две сортировки, остальные отвечают {"error":"Invalid order"}.
+const LABY_ORDERS = new Set(['most_used', 'latest']);
+
+/**
+ * Повтор только для сбоев, которые могут пройти сами: сеть, 5xx и заслон
+ * Cloudflare (403/429). На 400/404 повторять нечего — ответ не изменится.
+ */
+async function grabRetry(url, headers = {}, tries = 3) {
+  let lastRes = null;
+  for (let i = 0; i < tries; i++) {
+    lastRes = await grab(url, headers);
+    if (lastRes.ok) return lastRes;
+    const worthRetry = lastRes.status >= 500 || lastRes.status === 403 || lastRes.status === 429;
+    if (!worthRetry) return lastRes;
+    await sleep(400 * (i + 1));
+  }
+  return lastRes;
+}
+
+/**
+ * Список популярных/новых скинов с Laby.net — у них это открытый JSON,
+ * без защиты от ботов, в отличие от страниц самого NameMC (там Cloudflare
+ * отдаёт JS-проверку вместо списка при запросе не из настоящего браузера).
+ */
+async function gallery(order = 'most_used', size = 60) {
+  const safe = LABY_ORDERS.has(order) ? order : 'most_used';
+  const r = await grabRetry(`${LABY_SEARCH}?order=${safe}&size=${size}`);
+  if (!r.ok) throw new Error(`Laby.net не ответил (HTTP ${r.status})`);
+  const j = await r.json();
+  return (j.results || []).map((s) => ({
+    hash: s.image_hash,
+    slim: Boolean(s.slim),
+    useCount: s.use_count,
+    tags: s.tags || '',
+    thumb: LABY_TEXTURE(s.image_hash),
+    source: 'laby',
+  }));
+}
+
+/** Достаёт из ссылки/хеша источник и прямой адрес PNG-текстуры */
+function parseSkinLink(input) {
+  const s = String(input || '').trim();
+  let m = s.match(/namemc\.com\/skin\/([0-9a-f]{16})/i) || s.match(/^([0-9a-f]{16})$/i);
+  if (m) return { source: 'namemc', id: m[1], url: NAMEMC_TEXTURE(m[1]) };
+
+  m = s.match(/s\.namemc\.com\/i\/([0-9a-f]{16})\.png/i);
+  if (m) return { source: 'namemc', id: m[1], url: s };
+
+  m = s.match(/laby\.net\/skin\/([0-9a-f]{32})/i) || s.match(/^([0-9a-f]{32})$/i);
+  if (m) return { source: 'laby', id: m[1], url: LABY_TEXTURE(m[1]) };
+
+  m = s.match(/laby\.net\/texture\/([0-9a-f]{32})/i);
+  if (m) return { source: 'laby', id: m[1], url: LABY_TEXTURE(m[1]) };
+
+  return null;
+}
+
+/** Скачивает скин по ссылке (или хешу) с NameMC/Laby.net в библиотеку */
+async function importFromUrl(link) {
+  const parsed = parseSkinLink(link);
+  if (!parsed) throw new Error('Не распознал ссылку — нужна ссылка на скин с namemc.com или laby.net');
+
+  const headers = parsed.source === 'namemc' ? { Referer: `https://namemc.com/skin/${parsed.id}` } : {};
+  const res = await grabRetry(parsed.url, headers);
+  if (!res.ok) throw new Error(`Не удалось скачать скин (HTTP ${res.status})`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const size = pngSize(buf);
+  if (!size) throw new Error('По этой ссылке не PNG-скин');
+
+  await fsp.mkdir(dirs.skins, { recursive: true });
+  const dest = skinFile(`${parsed.source}_${parsed.id.slice(0, 8)}`);
+  await fsp.writeFile(dest, buf);
+  return {
+    name: path.basename(dest, '.png'),
+    file: dest,
+    ...size,
+    source: parsed.source,
+    dataUrl: `data:image/png;base64,${buf.toString('base64')}`,
+  };
+}
+
 // ---------------- лицензия Microsoft ----------------
 
 /** Загружает скин на аккаунт Mojang. variant: classic | slim */
@@ -321,4 +414,5 @@ module.exports = {
   uploadMojang, resetMojang, setCape, fetchProfile,
   applyLocal, installLoaderMod, CSL_PROJECT,
   downloadByName, downloadOwn,
+  gallery, importFromUrl, parseSkinLink,
 };

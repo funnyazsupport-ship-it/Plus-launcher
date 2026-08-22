@@ -390,6 +390,107 @@ async function renderBackups(instanceId) {
 
 $('#ic-bk-folder').addEventListener('click', () => { if (editing) app.backups.folder(editing.id); });
 
+// ---------------- файл сборки .plusmodpack ----------------
+
+$('#ic-export').addEventListener('click', async (e) => {
+  if (!editing) return;
+  const btn = e.currentTarget;
+  const note = $('#ic-export-note');
+  btn.disabled = true;
+  note.hidden = true;
+  try {
+    const r = await call(app.mods.exportFile({ taskId: newTask(), instanceId: editing.id }));
+    if (!r) return;                                   // окно сохранения закрыли
+    note.hidden = false;
+    note.className = r.skipped.length ? 'note warn' : 'note ok';
+    const parts = [`Сохранено. Из каталога скачается модов: ${r.count}`];
+    // моды, которых нет в каталогах, уезжают внутри файла — иначе потерялись бы
+    if (r.packed.length) parts.push(`внутри файла: ${r.packed.length} (${Math.round(r.bytes / 1048576 * 10) / 10} МБ)`);
+    if (r.skipped.length) parts.push(`не удалось прочитать: ${r.skipped.join(', ')}`);
+    note.textContent = parts.join('. ');
+  } catch { /* тост уже показан */ } finally {
+    btn.disabled = false;
+    clearProgress();
+  }
+});
+
+let openedPack = null;           // {file, pack} — что предлагаем поставить
+
+function showPackOffer(file, pack) {
+  openedPack = { file, pack };
+  $('#po-name').value = pack.name;
+  $('#po-about').textContent = `Minecraft ${pack.mc} · ${pack.loader === 'vanilla' ? 'без модов' : pack.loader}`;
+  const bundled = pack.bundled || [];
+  $('#po-count').textContent = String(pack.mods.length + bundled.length);
+  const box = $('#po-mods');
+  box.innerHTML = '';
+  for (const m of pack.mods) {
+    const el = document.createElement('div');
+    el.className = 'row';
+    el.textContent = m.name;
+    box.appendChild(el);
+  }
+  // моды, которых нет в каталогах, лежат прямо в файле — помечаем, чтобы было понятно,
+  // почему они ставятся даже без интернета и почему файл столько весит
+  for (const b of bundled) {
+    const el = document.createElement('div');
+    el.className = 'row';
+    el.innerHTML = '<span></span><b class="in-file">из файла</b>';
+    el.querySelector('span').textContent = b.file + (b.enabled ? '' : ' (выключен)');
+    box.appendChild(el);
+  }
+  const note = $('#po-note');
+  note.hidden = !pack.skipped;
+  if (pack.skipped) {
+    note.className = 'note warn';
+    note.textContent = `Строк в файле пропущено: ${pack.skipped} — они записаны не так, как ожидает лаунчер.`;
+  }
+  $('#pack-open').hidden = false;
+}
+
+const closePackOffer = () => { $('#pack-open').hidden = true; openedPack = null; };
+$('#po-close').addEventListener('click', closePackOffer);
+$('#po-cancel').addEventListener('click', closePackOffer);
+
+$('#po-install').addEventListener('click', async (e) => {
+  if (!openedPack) return;
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  state.busy = true; updateDock();
+  try {
+    const r = await call(app.mods.installFile({
+      taskId: newTask(), file: openedPack.file, name: $('#po-name').value.trim(),
+    }));
+    closePackOffer();
+    state.instances = await call(app.instances.list());
+    selectInstance(r.instance.id);
+    renderInstances(); syncInstanceSelects();
+
+    const fromFile = r.unpacked?.length ? `, из файла ${r.unpacked.length}` : '';
+    toast(`Сборка готова: ${r.instance.name} (${r.installed.length} из ${r.total} модов${fromFile})`);
+    if (r.failed.length) {
+      toast(`Не встали: ${r.failed.map((f) => f.name).join(', ')}`, 'warn');
+    }
+    if (r.loaderSwapped) {
+      toast(`Версии загрузчика ${r.loaderSwapped.want} больше нет, поставлена ${r.loaderSwapped.used}`, 'warn');
+    }
+    go('play');
+  } catch { /* тост уже показан */ } finally {
+    btn.disabled = false;
+    state.busy = false; updateDock(); clearProgress();
+  }
+});
+
+// файл открыли двойным кликом — главный процесс присылает путь
+app.on('packfile:open', async ({ file }) => {
+  try {
+    const pack = await call(app.mods.readFile(file), true);
+    showPackOffer(file, pack);
+  } catch (err) {
+    toast(err.message || 'Не удалось прочитать файл сборки', 'err');
+  }
+});
+
 $('#ic-mode').querySelectorAll('button').forEach((b) =>
   b.addEventListener('click', () => paintOwnMode(b.dataset.mode === 'own')));
 $('#ic-maxram').addEventListener('input', (e) => { $('#ic-ram-label').textContent = `${e.target.value} МБ`; });
@@ -1102,6 +1203,85 @@ $('#skin-fetch').addEventListener('click', (e) => {
 $('#skin-nick').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#skin-fetch').click(); });
 $('#skin-fetch-own').addEventListener('click', (e) => fetchSkin(() => app.skins.fetchOwn(), e.currentTarget));
 
+// ---------------- каталог: подборка с Laby.net + импорт по ссылке ----------------
+
+async function loadGallery() {
+  const box = $('#skin-gallery');
+  const order = $('#gallery-order').value;
+  box.innerHTML = '<span class="dim">Загрузка…</span>';
+  try {
+    const items = await call(app.skins.gallery(order), true);
+    box.innerHTML = '';
+    if (!items || !items.length) { box.innerHTML = '<span class="dim">Ничего не нашлось</span>'; return; }
+    for (const it of items) {
+      const tile = document.createElement('div');
+      tile.className = 'skin-tile';
+      tile.title = it.tags || '';
+      const face = document.createElement('div');
+      face.className = 'face';
+      // показываем только лицо (8x8 из текстуры 64x64), увеличенное в 5 раз
+      face.style.backgroundImage = `url("${it.thumb}")`;
+      face.style.backgroundSize = '320px 320px';
+      face.style.backgroundPosition = '-40px -40px';
+      const span = document.createElement('span');
+      // у свежезагруженных скинов тегов ещё нет — подписываем хешем, чтобы плитки различались
+      span.textContent = it.tags ? it.tags.split(' ')[0] : it.hash.slice(0, 6);
+      tile.append(face, span);
+      tile.addEventListener('click', () => importGallerySkin(it, tile));
+      box.appendChild(tile);
+    }
+  } catch (e) {
+    box.innerHTML = '';
+    toast(e.message, 'err');
+  }
+}
+
+async function importGallerySkin(item, tile) {
+  if (tile.classList.contains('busy')) return;
+  tile.classList.add('busy');
+  try {
+    const s = await call(app.skins.importUrl(item.hash), true);
+    state.skins.current = s;
+    state.skins.variant = item.slim ? 'slim' : 'classic';
+    $$('#skin-variant button').forEach((b) => b.classList.toggle('on', b.dataset.variant === state.skins.variant));
+    await loadSkins();
+    toast(`Добавлено: ${s.name}`);
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    tile.classList.remove('busy');
+  }
+}
+
+$('#gallery-load').addEventListener('click', loadGallery);
+$('#gallery-namemc').addEventListener('click', () => app.shell.open('https://ru.namemc.com/minecraft-skins/trending'));
+
+$('#skin-url-import').addEventListener('click', async () => {
+  const link = $('#skin-url').value.trim();
+  const note = $('#skin-url-note');
+  if (!link) return toast('Вставьте ссылку', 'err');
+  const btn = $('#skin-url-import');
+  btn.disabled = true;
+  note.hidden = true;
+  try {
+    const s = await call(app.skins.importUrl(link), true);
+    state.skins.current = s;
+    state.skins.variant = s.variant || 'classic';
+    $$('#skin-variant button').forEach((b) => b.classList.toggle('on', b.dataset.variant === state.skins.variant));
+    await loadSkins();
+    note.hidden = false;
+    note.className = 'note ok';
+    note.textContent = `${s.name}: скин ${s.width}x${s.height} добавлен в библиотеку`;
+    $('#skin-url').value = '';
+  } catch (e) {
+    note.hidden = false;
+    note.className = 'note err';
+    note.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $('#skin-delete').addEventListener('click', async () => {
   const s = state.skins.current;
   if (!s) return toast('Сначала выберите скин', 'err');
@@ -1362,6 +1542,8 @@ function bindSettings() {
   $('#s-autocheck').addEventListener('change', (e) => save({ checkUpdatesOnStart: e.target.checked }));
   $('#s-ai').checked = cfg.aiCrashHelp !== false;
   $('#s-ai').addEventListener('change', (e) => save({ aiCrashHelp: e.target.checked }));
+  $('#s-ai-actions').checked = cfg.aiActions !== false;
+  $('#s-ai-actions').addEventListener('change', (e) => save({ aiActions: e.target.checked }));
   $('#s-stats').checked = cfg.shareStats !== false;
   $('#s-stats').addEventListener('change', (e) => save({ shareStats: e.target.checked }));
   $('#s-check-update').addEventListener('click', () => checkUpdate(false));
@@ -1383,6 +1565,11 @@ async function initSupport() {
   $('#s-support-name').textContent = links.supportName || 'Telegram';
   $('#s-support').hidden = !links.support;
   $('#s-site').hidden = !links.site;
+
+  // Подпись под названием в шапке. Адрес берём из настроек сборки, а не из вёрстки,
+  // чтобы он не разошёлся со ссылкой на кнопке «Наш сайт».
+  const mark = $('#brand-site');
+  if (mark && links.site) mark.textContent = links.site.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 }
 
 $('#s-support').addEventListener('click', () => links.support && app.shell.open(links.support));
@@ -1942,9 +2129,11 @@ app.on('auth:code', (dc) => {
   $('#ms-url').textContent = dc.verificationUri;
   go('account');
 
-  // Сразу открываем страницу с уже вписанным кодом — человеку остаётся подтвердить.
-  // Код при этом остаётся на экране: браузер мог не открыться, а страница —
-  // потерять код при перезагрузке, и тогда его вводят руками.
+  // Код сразу кладём в буфер: страницу Microsoft открываем обычную, и там
+  // остаётся только вставить его. Свой адрес с подставленным кодом собирать
+  // нельзя — Microsoft отвечает на такой ошибкой, поэтому и копируем.
+  navigator.clipboard.writeText(dc.userCode).catch(() => {});
+  toast('Код скопирован — вставьте его на странице Microsoft');
   app.shell.open(msLinkWithCode);
 });
 

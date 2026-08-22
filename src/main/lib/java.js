@@ -42,7 +42,21 @@ function candidateRoots() {
     roots.push('C:\\Program Files\\Minecraft Launcher\\runtime');
     roots.push(path.join(process.env.APPDATA || '', '.minecraft', 'runtime'));
   } else {
-    roots.push('/usr/lib/jvm', '/Library/Java/JavaVirtualMachines', path.join(os.homedir(), '.jdks'));
+    // У каждого дистрибутива своё место для Java: Debian и Arch кладут в /usr/lib/jvm,
+    // Fedora и openSUSE на 64 битах — в /usr/lib64/jvm, пакеты Oracle — в /usr/java,
+    // ручные распаковки обычно попадают в /opt. Отдельно смотрим SDKMAN и IDE-шные .jdks.
+    roots.push(
+      '/usr/lib/jvm',
+      '/usr/lib64/jvm',
+      '/usr/java',
+      '/opt/java',
+      '/opt/jdk',
+      '/opt',
+      '/Library/Java/JavaVirtualMachines',            // macOS
+      path.join(os.homedir(), '.jdks'),
+      path.join(os.homedir(), '.sdkman', 'candidates', 'java'),
+      path.join(os.homedir(), '.local', 'share', 'JetBrains'),
+    );
   }
   roots.push(dirs.runtime);
   return roots.filter(Boolean);

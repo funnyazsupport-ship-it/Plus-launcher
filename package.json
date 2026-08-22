@@ -1,18 +1,20 @@
 {
   "name": "plus-launcher",
-  "version": "1.13.1",
+  "version": "1.19.0",
   "description": "Plus Launcher - Minecraft launcher with Microsoft login, all versions, Fabric/Quilt/Forge/NeoForge and built-in Modrinth + CurseForge mod browser",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "test": "node --test \"test/*.test.js\"",
     "key": "node scripts/make-embedded-key.js",
     "build": "electron-builder --win",
     "build:win": "electron-builder --win -p never",
     "build:linux": "electron-builder --linux -p never",
     "build:mac": "electron-builder --mac -p never",
     "release": "electron-builder --win -p never",
-    "publish": "electron-builder --win -p always"
+    "publish": "electron-builder --win -p always",
+    "check-ms": "node scripts/check-ms-auth.js"
   },
   "author": "Plus",
   "license": "MIT",
@@ -108,6 +110,18 @@
           ]
         },
         {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "pacman",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
           "target": "tar.gz",
           "arch": [
             "x64"
@@ -121,9 +135,50 @@
       "maintainer": "Plus Launcher <noreply@users.noreply.github.com>",
       "executableName": "plus-launcher",
       "desktop": {
-        "StartupWMClass": "Plus Launcher"
+        "StartupWMClass": "Plus Launcher",
+        "MimeType": "application/x-plus-modpack;",
+        "Keywords": "minecraft;launcher;mods;игра;майнкрафт;",
+        "Comment": "Лаунчер Minecraft со всеми версиями и модами"
       },
-      "artifactName": "PlusLauncher-${version}-${arch}.${ext}"
+      "artifactName": "PlusLauncher-${version}-${arch}.${ext}",
+      "mimeTypes": [
+        "application/x-plus-modpack"
+      ]
+    },
+    "fileAssociations": [
+      {
+        "ext": "plusmodpack",
+        "name": "Plus Launcher modpack",
+        "description": "Сборка Plus Launcher",
+        "icon": "build/icon",
+        "role": "Viewer",
+        "mimeType": "application/x-plus-modpack"
+      }
+    ],
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ]
+    },
+    "rpm": {
+      "depends": [
+        "gtk3",
+        "libnotify",
+        "nss",
+        "libXScrnSaver",
+        "libXtst",
+        "xdg-utils",
+        "at-spi2-core",
+        "libsecret"
+      ]
     }
   }
 }

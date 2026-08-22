@@ -15,6 +15,7 @@
   --accent-2: #5da336;
   --accent-hi: #82cf51;
   --accent-dim: rgba(116, 192, 69, .14);
+  --accent-line: rgba(116, 192, 69, .38);
   --on-accent: #0c1c05;
   --warn: #e0a33a;
   --danger: #d05555;
@@ -37,7 +38,13 @@
   --shade: rgba(6, 7, 9, .78);
   --mr: #4fbb70;
   --cf: #e07a3c;
-  --r: 3px;
+  /* Скругления: --r для панелей и карточек, --r-sm для мелочи вроде кнопок,
+     --r-pill для меток. Раньше было 3px на всё — интерфейс выглядел жёстко. */
+  --r: 9px;
+  --r-sm: 6px;
+  --r-pill: 20px;
+  --shadow: 0 3px 12px rgba(0, 0, 0, .32);
+  --glow: 0 3px 14px rgba(116, 192, 69, .26);
   --mono: "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
 }
 
@@ -55,6 +62,7 @@
   --accent-2: #3f8019;
   --accent-hi: #5cb029;
   --accent-dim: rgba(78, 156, 34, .12);
+  --accent-line: rgba(78, 156, 34, .34);
   --on-accent: #ffffff;
   --warn: #a86a12;
   --danger: #c23b3b;
@@ -77,6 +85,9 @@
   --shade: rgba(30, 34, 40, .42);
   --mr: #2f9153;
   --cf: #c25c1c;
+  /* на светлом фоне тень должна быть заметно легче, иначе выглядит грязью */
+  --shadow: 0 3px 12px rgba(29, 32, 39, .12);
+  --glow: 0 3px 12px rgba(78, 156, 34, .22);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -99,18 +110,24 @@ svg { width: 16px; height: 16px; flex-shrink: 0; }
 
 /* ---------- верхняя полоса ---------- */
 .topbar {
-  display: flex; align-items: center; height: 38px; padding-left: 12px; flex-shrink: 0;
+  display: flex; align-items: center; height: 44px; padding-left: 12px; flex-shrink: 0;
   background: var(--bg-2); border-bottom: 1px solid var(--line);
 }
 .drag { flex: 1; height: 100%; -webkit-app-region: drag; }
 .brand { display: flex; align-items: center; gap: 9px; -webkit-app-region: drag; }
-.brand-mark { width: 20px; height: 20px; }
-.brand-text { display: flex; align-items: baseline; gap: 5px; }
+.brand-mark { width: 22px; height: 22px; }
+.brand-text { display: flex; flex-direction: column; gap: 1px; }
+.brand-row { display: flex; align-items: baseline; gap: 5px; }
 .brand-text b { font-size: 13px; font-weight: 700; letter-spacing: .06em; }
-.brand-text span { font-size: 10px; letter-spacing: .16em; color: var(--dim); }
+.brand-row span { font-size: 10px; letter-spacing: .16em; color: var(--dim); }
+/* адрес сайта — приглушённый, чтобы не спорить с названием */
+.brand-site {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .02em;
+  color: var(--dim); opacity: .7; line-height: 1;
+}
 .winctl { display: flex; -webkit-app-region: no-drag; }
 .winctl button {
-  width: 42px; height: 38px; border: 0; background: none; color: var(--dim);
+  width: 42px; height: 44px; border: 0; background: none; color: var(--dim);
   display: grid; place-items: center; cursor: pointer;
 }
 .winctl svg { width: 12px; height: 12px; }
@@ -124,17 +141,24 @@ svg { width: 16px; height: 16px; flex-shrink: 0; }
   width: 194px; flex-shrink: 0; display: flex; flex-direction: column; padding: 8px;
   background: var(--bg-2); border-right: 1px solid var(--line);
 }
+/* Вкладки — скруглённые полосы. Активная залита цветом акцента, а не отмечена
+   полоской сбоку: так видно с одного взгляда, где находишься. */
 .rail-item {
-  display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 0; border-left: 2px solid transparent;
+  display: flex; align-items: center; gap: 10px; padding: 9px 11px; margin-bottom: 2px;
+  border: 0; border-radius: var(--r-sm);
   background: none; color: var(--dim); font: inherit; font-weight: 500; cursor: pointer; text-align: left;
+  transition: background .13s, color .13s;
 }
 .rail-item svg { color: currentColor; }
 .rail-item:hover { background: var(--panel); color: var(--text); }
-.rail-item.active { background: var(--panel); color: var(--text); border-left-color: var(--accent); }
+.rail-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
 .rail-item.active svg { color: var(--accent); }
 .rail-foot { margin-top: auto; }
-.who { display: flex; align-items: center; gap: 9px; padding: 9px; background: var(--panel); border: 1px solid var(--line); }
-.who img { width: 30px; height: 30px; image-rendering: pixelated; background: var(--panel-2); }
+.who {
+  display: flex; align-items: center; gap: 9px; padding: 9px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.who img { width: 30px; height: 30px; image-rendering: pixelated; background: var(--panel-2); border-radius: 5px; }
 .who-t { min-width: 0; }
 .who-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who-kind { font-size: 10px; color: var(--dim); }
@@ -156,15 +180,21 @@ p.dim { font-size: 12.5px; }
 
 /* ---------- элементы ---------- */
 .btn {
-  display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: var(--r);
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: var(--r-sm);
   border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text);
   font: inherit; font-size: 12.5px; font-weight: 550; cursor: pointer;
+  white-space: nowrap;            /* «Новая сборка» не должна ломаться на две строки */
+  transition: background .13s, border-color .13s;
 }
 .btn:hover:not(:disabled) { background: var(--hover); border-color: var(--hover-line); }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 .btn svg { width: 14px; height: 14px; }
-.btn.accent { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 650; }
-.btn.accent:hover:not(:disabled) { background: var(--accent-hi); border-color: var(--accent-hi); }
+/* градиент вместо плоской заливки: главная кнопка должна читаться первой */
+.btn.accent {
+  background: linear-gradient(180deg, var(--accent-hi) 0%, var(--accent-2) 100%);
+  border-color: transparent; color: var(--on-accent); font-weight: 650;
+}
+.btn.accent:hover:not(:disabled) { filter: brightness(1.08); border-color: transparent; }
 .btn.danger { color: var(--danger-text); border-color: var(--danger-line); background: var(--danger-bg); }
 .btn.danger:hover:not(:disabled) { background: var(--danger-bg-2); border-color: var(--danger-line-2); }
 .btn.lg { padding: 10px 18px; font-size: 13px; }
@@ -175,9 +205,16 @@ p.dim { font-size: 12.5px; }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 15px; margin-bottom: 14px; }
 .side-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
-.count { font-size: 11px; color: var(--dim); background: var(--panel-2); border: 1px solid var(--line); padding: 1px 7px; }
+.count { font-size: 11px; color: var(--dim); background: var(--panel-2); border: 1px solid var(--line); padding: 2px 8px; border-radius: var(--r-pill); }
 .divider { height: 1px; background: var(--line); margin: 16px 0 12px; }
 .panel p.dim { margin-bottom: 11px; }
+
+/*
+ * Поля, стоящие прямо в панели (вход в аккаунт), иначе липнут друг к другу
+ * и к кнопке под ними. Внутри .form-row поля не задеваются: там свой отступ.
+ */
+.panel > label.f { margin-bottom: 11px; }
+.panel > label.f + .btn { margin-top: 5px; }
 
 .form-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 11px; flex-wrap: wrap; }
 .form-row.right { justify-content: flex-end; align-items: center; margin-bottom: 0; }
@@ -186,6 +223,8 @@ p.dim { font-size: 12.5px; }
 .stack { display: flex; flex-direction: column; gap: 8px; }
 .stack.row { flex-direction: row; flex-wrap: wrap; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* три способа входа рядом; на узком окне колонки схлопываются ниже по файлу */
+.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 
 input, select, textarea {
   padding: 8px 10px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--bg);
@@ -197,10 +236,10 @@ select { cursor: pointer; }
 select option { background: var(--panel-2); }
 input[type=range] {
   -webkit-appearance: none; width: 100%; height: 4px; padding: 0; margin: 4px 0 14px;
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 0;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-pill);
 }
 input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 12px; height: 18px; background: var(--accent); border: 0; cursor: pointer;
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 0; cursor: pointer;
 }
 .check { display: flex; align-items: center; gap: 8px; margin: 7px 0; cursor: pointer; font-size: 12.5px; }
 .check input { width: 14px; height: 14px; accent-color: var(--accent); }
@@ -208,7 +247,7 @@ input[type=range]::-webkit-slider-thumb {
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   display: flex; align-items: center; gap: 7px; padding: 5px 9px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: var(--r); font-size: 11.5px; color: var(--dim);
+  border: 1px solid var(--line); border-radius: var(--r-pill); font-size: 11.5px; color: var(--dim);
   font-family: var(--mono);
 }
 .chip b { color: var(--text); font-weight: 600; }
@@ -216,34 +255,63 @@ input[type=range]::-webkit-slider-thumb {
 .chip.pick:hover { border-color: var(--accent); color: var(--text); }
 
 .swatches { display: flex; gap: 6px; }
-.swatches button { width: 22px; height: 22px; border: 1px solid var(--line-2); border-radius: 2px; cursor: pointer; padding: 0; }
+.swatches button { width: 22px; height: 22px; border: 1px solid var(--line-2); border-radius: 50%; cursor: pointer; padding: 0; }
 .swatches button.on { outline: 2px solid var(--text); outline-offset: 1px; }
 
 /* ---------- карточки сборок ---------- */
-.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 10px; }
+.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(246px, 1fr)); gap: 12px; }
+/*
+ * Карточка сборки. Цвет сборки (--c) задаётся пользователем и остаётся
+ * опознавательным знаком: он в значке и в тонкой полосе сверху. Полоса сверху,
+ * а не слева, — со скруглёнными углами боковая линия смотрится обрубленной.
+ */
 .card {
-  position: relative; display: flex; gap: 11px; padding: 13px; cursor: pointer;
+  position: relative; display: flex; gap: 12px; padding: 14px; cursor: pointer; overflow: hidden;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
-  border-left: 3px solid var(--c, var(--accent));
+  transition: border-color .14s, transform .14s, box-shadow .14s, background .14s;
 }
-.card:hover { background: var(--panel-2); border-color: var(--line-2); border-left-color: var(--c, var(--accent)); }
-.card.on { border-color: var(--accent); border-left-color: var(--accent); background: var(--panel-2); }
+.card::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+  background: var(--c, var(--accent));
+}
+.card:hover { background: var(--panel-2); border-color: var(--line-2); transform: translateY(-2px); box-shadow: var(--shadow); }
+.card.on {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, var(--accent-dim) 0%, var(--panel) 60%);
+}
 .card-mark {
-  width: 38px; height: 38px; display: grid; place-items: center; flex-shrink: 0;
+  width: 42px; height: 42px; display: grid; place-items: center; flex-shrink: 0; border-radius: 8px;
   background: color-mix(in srgb, var(--c, var(--accent)) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 45%, transparent);
 }
-.card-mark svg { width: 19px; height: 19px; color: var(--c, var(--accent)); }
+.card-mark svg { width: 20px; height: 20px; color: var(--c, var(--accent)); }
 .card-body { min-width: 0; flex: 1; }
-.card-name { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
-.card-meta .ld { color: var(--text); }
-.card-acts { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; opacity: 0; }
+.card-name { font-size: 14px; font-weight: 600; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* версия и загрузчик — метками: так они читаются как свойства, а не как строка текста */
+.card-meta { display: flex; flex-wrap: wrap; gap: 5px; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+.card-meta + .card-meta { margin-top: 5px; }
+.card-meta span {
+  padding: 2px 7px; border-radius: var(--r-pill);
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.card-meta .ld { color: var(--accent); border-color: var(--accent-line, rgba(116, 192, 69, .35)); background: var(--accent-dim); }
+.card-acts { position: absolute; top: 10px; right: 10px; display: flex; gap: 3px; opacity: 0; transition: opacity .14s; }
 .card:hover .card-acts { opacity: 1; }
-.card-acts button { width: 22px; height: 22px; border: 1px solid var(--line); background: var(--bg); color: var(--dim); cursor: pointer; display: grid; place-items: center; }
+.card-acts button {
+  width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--bg); color: var(--dim); cursor: pointer; display: grid; place-items: center;
+}
 .card-acts button svg { width: 12px; height: 12px; }
 .card-acts button:hover { color: var(--text); border-color: var(--line-2); }
 .card-acts button.del:hover { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
+
+/* пометка у модов, которые лежат внутри файла сборки, а не качаются */
+.side-list .row .in-file, .row .in-file {
+  margin-left: auto; font-size: 10px; font-family: var(--mono); font-weight: 500;
+  color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent-line);
+  padding: 1px 7px; border-radius: var(--r-pill);
+}
+.side-list .row { display: flex; align-items: center; gap: 8px; }
 
 .blank { text-align: center; padding: 54px 20px; border: 1px dashed var(--line-2); border-radius: var(--r); }
 .blank-mark { width: 30px; height: 30px; color: var(--line-2); margin-bottom: 10px; }
@@ -259,11 +327,11 @@ input[type=range]::-webkit-slider-thumb {
 .split { display: grid; grid-template-columns: 1fr 272px; gap: 14px; align-items: start; }
 .rows { display: flex; flex-direction: column; gap: 6px; }
 .row-item {
-  display: flex; gap: 12px; padding: 11px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: var(--r);
+  display: flex; gap: 12px; padding: 12px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--r); transition: border-color .14s, background .14s;
 }
 .row-item:hover { background: var(--panel-2); border-color: var(--line-2); }
-.row-item img { width: 46px; height: 46px; object-fit: cover; background: var(--panel-2); flex-shrink: 0; }
+.row-item img { width: 46px; height: 46px; object-fit: cover; background: var(--panel-2); flex-shrink: 0; border-radius: 7px; }
 .row-main { flex: 1; min-width: 0; }
 .row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
 .row-title b { font-size: 13.5px; font-weight: 600; }
@@ -302,7 +370,7 @@ input[type=range]::-webkit-slider-thumb {
 
 /* своя иконка сборки: картинка вместо кубика */
 .card-mark img, .dock-mark img, .icon-preview img {
-  width: 100%; height: 100%; object-fit: cover; border-radius: 2px;
+  width: 100%; height: 100%; object-fit: cover; border-radius: 6px;
   image-rendering: pixelated;             /* иконки из Minecraft обычно мелкие и пиксельные */
 }
 .icon-pick { display: flex; align-items: center; gap: 10px; }
@@ -371,6 +439,8 @@ input[type=range]::-webkit-slider-thumb {
 .skin-tile:hover { border-color: var(--line-2); }
 .skin-tile.on { border-color: var(--accent); background: var(--accent-dim); }
 .skin-tile canvas { image-rendering: pixelated; }
+.skin-tile .face { width: 40px; height: 40px; image-rendering: pixelated; background-repeat: no-repeat; }
+.skin-tile.busy { opacity: .5; pointer-events: none; }
 .skin-tile span {
   font-family: var(--mono); font-size: 9.5px; color: var(--dim); max-width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -407,7 +477,7 @@ input[type=range]::-webkit-slider-thumb {
 }
 .dock-inst { display: flex; align-items: center; gap: 10px; width: 230px; min-width: 0; }
 .dock-mark {
-  width: 36px; height: 36px; display: grid; place-items: center; flex-shrink: 0;
+  width: 36px; height: 36px; display: grid; place-items: center; flex-shrink: 0; border-radius: 7px;
   background: color-mix(in srgb, var(--c, var(--accent)) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 45%, transparent);
 }
@@ -415,19 +485,27 @@ input[type=range]::-webkit-slider-thumb {
 .dock-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dock-sub { font-size: 10.5px; }
 .dock-prog { flex: 1; min-width: 0; }
-.track { height: 3px; background: var(--panel-2); border: 1px solid var(--line); }
-.fill { height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+.track { height: 5px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
+.fill { height: 100%; width: 0; border-radius: var(--r-pill); background: linear-gradient(90deg, var(--accent-2), var(--accent-hi)); transition: width .25s linear; }
 .dock-stage { font-size: 10.5px; margin-top: 5px; height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Главное действие в программе — поэтому градиент и мягкое свечение под кнопкой */
 .play-btn {
-  padding: 12px 42px; border: 0; border-bottom: 3px solid var(--accent-2); border-radius: var(--r);
-  background: var(--accent); color: var(--on-accent); font: inherit; font-size: 14px; font-weight: 750;
-  letter-spacing: .1em; cursor: pointer;
+  padding: 13px 44px; border: 0; border-radius: var(--r-sm);
+  background: linear-gradient(180deg, var(--accent-hi) 0%, var(--accent-2) 100%);
+  color: var(--on-accent); font: inherit; font-size: 14px; font-weight: 750;
+  letter-spacing: .1em; cursor: pointer; box-shadow: var(--glow);
+  transition: filter .13s, transform .1s, box-shadow .13s;
 }
-.play-btn:hover:not(:disabled) { background: var(--accent-hi); }
-.play-btn:active:not(:disabled) { transform: translateY(1px); border-bottom-width: 2px; }
-.play-btn:disabled { background: var(--panel-2); border-bottom-color: var(--line); color: var(--disabled-text); cursor: not-allowed; }
-.play-btn.stop { background: var(--danger); border-bottom-color: var(--danger-2); color: var(--on-danger); }
+.play-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.play-btn:active:not(:disabled) { transform: translateY(1px); }
+.play-btn:disabled {
+  background: var(--panel-2); color: var(--disabled-text); cursor: not-allowed; box-shadow: none;
+}
+.play-btn.stop {
+  background: linear-gradient(180deg, var(--danger) 0%, var(--danger-2) 100%);
+  color: var(--on-danger); box-shadow: none;
+}
 
 /* ---------- тосты ---------- */
 .toasts { position: fixed; right: 16px; bottom: 84px; z-index: 40; display: flex; flex-direction: column; gap: 6px; }
@@ -456,6 +534,7 @@ input[type=range]::-webkit-slider-thumb {
 .crash-src { font-size: 11px; margin-bottom: 12px; }
 
 .ask-box { width: min(480px, 92vw); }
+.modal-box.narrow { width: min(520px, 92vw); }
 .ask-text { font-size: 12.5px; color: var(--dim); white-space: pre-line; margin-bottom: 14px; }
 .ask-text b { color: var(--text); font-family: var(--mono); font-weight: 500; word-break: break-all; }
 .ask-actions { display: flex; flex-direction: column; gap: 7px; }
@@ -470,5 +549,11 @@ input[type=range]::-webkit-slider-thumb {
 
 @media (max-width: 1080px) {
   .split, .skin-layout, .two { grid-template-columns: 1fr; }
+  .three { grid-template-columns: 1fr 1fr; }
   .side { position: static; }
+}
+
+/* в узком окне три способа входа рядом уже не читаются */
+@media (max-width: 760px) {
+  .three { grid-template-columns: 1fr; }
 }

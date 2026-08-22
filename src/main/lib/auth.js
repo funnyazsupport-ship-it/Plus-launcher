@@ -32,11 +32,14 @@ async function startDeviceCode(clientId) {
   return {
     userCode: d.user_code,
     verificationUri: uri,
-    // Адрес с уже подставленным кодом: человеку остаётся только подтвердить вход.
-    // Microsoft поле verification_uri_complete не присылает, но параметр otc
-    // её страница понимает и сама переводит на форму подтверждения.
-    verificationUriComplete: d.verification_uri_complete
-      || `${uri}?otc=${encodeURIComponent(d.user_code)}`,
+    /*
+     * Адрес с уже вписанным кодом отдаёт сама Microsoft — и только если захочет.
+     * Складывать его руками (`?otc=<код>`) нельзя: переадресация срабатывает,
+     * но конечная страница отвечает ошибкой «users are not permitted to consent
+     * to first party applications». Поэтому либо берём готовый адрес, либо
+     * открываем обычную страницу и даём человеку вставить код.
+     */
+    verificationUriComplete: d.verification_uri_complete || null,
     deviceCode: d.device_code,
     interval: (d.interval || 5) * 1000,
     expiresIn: d.expires_in || 900,
