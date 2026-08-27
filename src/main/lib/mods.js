@@ -157,8 +157,21 @@ async function search(opts) {
   return { hits, total: res.reduce((s, r) => s + (r.total || 0), 0), errors };
 }
 
-async function versionsFor(source, projectId, mc, loader) {
-  return source === 'modrinth' ? modrinthVersions(projectId, mc, loader) : curseforgeVersions(projectId, mc, loader);
+/*
+ * Загрузчик фильтрует только моды.
+ *
+ * У остального контента в каталогах своя разметка: у шейдеров загрузчики
+ * называются iris и optifine, у датапаков — datapack, у ресурспаков —
+ * minecraft. Фильтр по fabric или forge не совпадает с ними ни разу, и список
+ * версий выходил пустым: на сайте версия есть, а в лаунчере «нет версий».
+ */
+const loaderFilterFor = (kind) => (kind === 'mod' || !kind ? undefined : '');
+
+async function versionsFor(source, projectId, mc, loader, kind = 'mod') {
+  const use = loaderFilterFor(kind) === '' ? '' : loader;
+  return source === 'modrinth'
+    ? modrinthVersions(projectId, mc, use)
+    : curseforgeVersions(projectId, mc, use);
 }
 
 async function projectInfo(source, projectId) {
@@ -188,6 +201,61 @@ const LOADER_API = {
   fabric: { project: 'P7dR8mSH', match: /fabric[-_]?api/i },          // Fabric API
   quilt: { project: 'qvIfYCYJ', match: /(quilted[-_]?fabric[-_]?api|qfapi)/i }, // QFAPI
 };
+
+/*
+ * Шейдеры сами по себе не работают: игре нужен мод, который их читает.
+ * На Fabric и Quilt это Iris, на Forge и NeoForge — Oculus. Старый путь через
+ * OptiFine с OptiFabric тоже годится, поэтому его тоже считаем за подходящий.
+ * Без такого мода шейдерпак просто лежит в папке и ничего не меняет — человек
+ * решает, что лаунчер сломан.
+ */
+const SHADER_LOADER = {
+  fabric: { project: 'YL57xq9U', title: 'Iris Shaders' },
+  quilt: { project: 'YL57xq9U', title: 'Iris Shaders' },
+  forge: { project: 'GchcoXML', title: 'Oculus' },
+  // Iris умеет NeoForge сам, отдельный Oculus там не нужен
+  neoforge: { project: 'YL57xq9U', title: 'Iris Shaders' },
+};
+
+// Iris, Oculus, а также связка OptiFine + OptiFabric — любое из этого подойдёт
+const SHADER_MATCH = /(iris|oculus|optifine|optifabric)/i;
+
+/**
+ * Есть ли в сборке мод, умеющий читать шейдеры.
+ * @returns {Promise<null | {loader, mc, title, has: boolean}>} null — шейдеры тут не нужны
+ */
+async function shaderSupport(instanceId) {
+  const inst = config.load().instances.find((i) => i.id === instanceId);
+  if (!inst) return null;
+  const need = SHADER_LOADER[inst.loader];
+  if (!need) return null;                       // ваниль: шейдеры ставить некуда
+  const list = await listInstalled(instanceId, 'mod');
+  return {
+    loader: inst.loader,
+    mc: inst.mc,
+    title: need.title,
+    has: list.some((m) => m.enabled && SHADER_MATCH.test(m.file)),
+  };
+}
+
+/** Ставит Iris или Oculus, чтобы шейдеры заработали */
+async function installShaderLoader(instanceId, onProgress = () => {}) {
+  const inst = config.load().instances.find((i) => i.id === instanceId);
+  if (!inst) throw new Error('Сборка не найдена');
+  const need = SHADER_LOADER[inst.loader];
+  if (!need) throw new Error('Для сборки без загрузчика шейдеры не работают');
+
+  // Iris идёт с Modrinth, Oculus там же под своим адресом
+  return install({
+    source: 'modrinth',
+    projectId: need.project,
+    mc: inst.mc,
+    loader: inst.loader,
+    kind: 'mod',
+    instance: instanceId,
+    withDeps: true,
+  }, onProgress);
+}
 
 /** Ставит Fabric API / QFAPI, если его ещё нет в папке модов */
 async function ensureLoaderApi({ mc, loader, instance, kind }, onProgress) {
@@ -245,8 +313,12 @@ async function install({ source, projectId, versionId = null, mc, loader, kind =
   if (seen.has(key)) return { files: [] };
   seen.add(key);
 
-  const list = await versionsFor(source, projectId, mc, loader);
-  if (!list.length) throw new Error(`Нет версий для Minecraft ${mc}${loader ? ` / ${loader}` : ''}`);
+  const list = await versionsFor(source, projectId, mc, loader, kind);
+  if (!list.length) {
+    // про загрузчик пишем только там, где он действительно участвовал в отборе
+    const by = kind === 'mod' && loader ? ` / ${loader}` : '';
+    throw new Error(`Нет версий для Minecraft ${mc}${by}`);
+  }
   const ver = (versionId && list.find((v) => String(v.id) === String(versionId)))
     || list.find((v) => v.channel === 'release') || list[0];
 
@@ -307,6 +379,7 @@ async function remove(instance, file, kind = 'mod') {
 module.exports = {
   search, versionsFor, projectInfo, install, listInstalled, toggle, remove, targetFolder, KINDS,
   missingLoaderApi, installLoaderApi,
+  shaderSupport, installShaderLoader,
   // нужны установщику модпаков: он ходит в CurseForge своими запросами
   cfHeaders, cfFallbackUrl,
 };

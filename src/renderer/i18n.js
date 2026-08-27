@@ -799,6 +799,21 @@ const DICT = {
   'Не удалось прочитать файл сборки': [
     'Could not read the instance file', 'Не вдалося прочитати файл збірки'],
 
+  // ---- шейдеры ----
+  'Нужен %s': ['%s required', 'Потрібен %s'],
+  'Поставить %s и шейдер': ['Install %s and the shader', 'Поставити %s і шейдер'],
+  'Только шейдер': ['Shader only', 'Тільки шейдер'],
+  '%s установлен': ['%s installed', '%s встановлено'],
+  'В сборке без загрузчика шейдеры не работают — нужна сборка с Fabric, Quilt, Forge или NeoForge.': [
+    'Shaders do not work without a loader — you need an instance with Fabric, Quilt, Forge or NeoForge.',
+    'У збірці без завантажувача шейдери не працюють — потрібна збірка з Fabric, Quilt, Forge або NeoForge.'],
+  'Мод для шейдеров в сборке есть — шейдерпаки заработают сразу.': [
+    'The shader mod is already installed — shader packs will work right away.',
+    'Мод для шейдерів у збірці є — шейдерпаки запрацюють одразу.'],
+  'Шейдеры читает %s, а его в сборке нет. Лаунчер предложит поставить его вместе с первым шейдером.': [
+    'Shaders are read by %s, and it is not installed. The launcher will offer to add it with your first shader.',
+    'Шейдери читає %s, а його у збірці немає. Лаунчер запропонує поставити його разом із першим шейдером.'],
+
   // ---- история переписок с помощником ----
   'Новый': ['New', 'Новий'],
   'Новый разговор': ['New chat', 'Нова розмова'],

@@ -390,6 +390,61 @@ async function renderBackups(instanceId) {
 
 $('#ic-bk-folder').addEventListener('click', () => { if (editing) app.backups.folder(editing.id); });
 
+// ---------------- игра с другом ----------------
+
+/*
+ * Мир, открытый «для сети», живёт на случайном порту, и туннель пришлось бы
+ * перенастраивать после каждого запуска. Лаунчер держит постоянный порт и сам
+ * переводит его на текущий мир — тогда адрес для друга задаётся один раз.
+ */
+function paintShare(st) {
+  const on = st?.running;
+  $('#share-on').hidden = on;
+  $('#share-off').hidden = !on;
+  $('#share-port').disabled = on;
+
+  const box = $('#share-status');
+  if (!on) { box.textContent = 'выключено'; box.className = 'count mono'; return; }
+  box.className = 'count mono ok';
+  box.textContent = st.target ? `мир открыт · порт ${st.target}` : 'ждёт открытия мира';
+
+  const note = $('#share-note');
+  note.hidden = false;
+  if (!st.target) {
+    note.className = 'note';
+    note.textContent = 'Доступ включён. Осталось войти в мир и нажать Esc → «Открыть для сети».';
+  } else {
+    note.className = 'note ok';
+    note.textContent = `Мир открыт, друзья могут заходить${st.players ? `. Сейчас подключено: ${st.players}` : ''}.`;
+  }
+}
+
+$('#share-on').addEventListener('click', async () => {
+  const port = Number($('#share-port').value) || 25565;
+  try {
+    const st = await call(app.share.start(port), true);
+    paintShare(st);
+    toast('Доступ включён');
+  } catch (e) {
+    const note = $('#share-note');
+    note.hidden = false;
+    note.className = 'note err';
+    note.textContent = e.message;
+  }
+});
+
+$('#share-off').addEventListener('click', async () => {
+  await call(app.share.stop()).catch(() => {});
+  paintShare({ running: false });
+  toast('Доступ выключен');
+});
+
+$('#share-friends').addEventListener('click', () => app.friends.open());
+$('#open-friends').addEventListener('click', () => app.friends.open());
+
+// состояние меняет и главный процесс: мир открыли или игра закрылась
+app.on('share:state', paintShare);
+
 // ---------------- файл сборки .plusmodpack ----------------
 
 $('#ic-export').addEventListener('click', async (e) => {
@@ -725,10 +780,33 @@ $('#m-query').addEventListener('input', () => {
 
 /** Модпак ставится в новую сборку, поэтому выбор сборки для него не нужен */
 function paintKindHint() {
-  const pack = $('#m-kind').value === 'modpack';
+  const kind = $('#m-kind').value;
+  const pack = kind === 'modpack';
   $('#m-instance').disabled = pack;
   $('#m-any').disabled = pack;
   $('#modpack-hint').hidden = !pack;
+  paintShaderHint(kind);
+}
+
+/** Предупреждение про мод для шейдеров — до поиска, а не после установки */
+async function paintShaderHint(kind) {
+  const box = $('#shader-hint');
+  if (!box) return;
+  const instance = $('#m-instance').value;
+  if (kind !== 'shader' || !instance) { box.hidden = true; return; }
+
+  const s = await call(app.mods.shaderSupport(instance), true).catch(() => null);
+  if (!s) {
+    box.hidden = false;
+    box.className = 'note warn';
+    box.textContent = 'В сборке без загрузчика шейдеры не работают — нужна сборка с Fabric, Quilt, Forge или NeoForge.';
+    return;
+  }
+  box.hidden = false;
+  box.className = s.has ? 'note ok' : 'note warn';
+  box.textContent = s.has
+    ? `Мод для шейдеров в сборке есть — шейдерпаки заработают сразу.`
+    : `Шейдеры читает ${s.title}, а его в сборке нет. Лаунчер предложит поставить его вместе с первым шейдером.`;
 }
 $('#skin-instance').addEventListener('change', () => { $('#skin-note').className = 'note'; loadSkinProfile(); });
 $('#mods-more').addEventListener('click', () => searchMods(false));
@@ -828,10 +906,42 @@ async function installModpack(hit, versionId, btn) {
   }
 }
 
+/**
+ * Шейдерпак сам по себе ничего не делает: игре нужен мод, который его читает —
+ * Iris на Fabric и Quilt, Oculus на Forge. Подходит и старая связка OptiFine
+ * с OptiFabric. Без такого мода шейдер просто лежит в папке, и человек решает,
+ * что лаунчер сломан. Поэтому спрашиваем до установки, а не после.
+ * @returns {Promise<boolean>} можно ли продолжать установку
+ */
+async function ensureShaderLoader(instanceId) {
+  const s = await call(app.mods.shaderSupport(instanceId), true).catch(() => null);
+  if (!s || s.has) return true;                 // ваниль или мод уже стоит
+
+  const v = await ask({
+    title: `Нужен ${s.title}`,
+    text: `Шейдеры читает отдельный мод — без него шейдерпак скачается, но в игре ничего не изменится.\n\nДля загрузчика ${s.loader} это ${s.title}. Поставить его вместе с шейдером?`,
+    actions: [
+      { label: `Поставить ${s.title} и шейдер`, value: 'install', kind: 'accent' },
+      { label: 'Только шейдер', value: 'go' },
+      { label: 'Отмена', value: null },
+    ],
+  });
+  if (!v) return false;
+  if (v === 'install') {
+    try {
+      const r = await call(app.mods.installShaderLoader({ taskId: newTask(), instanceId }));
+      toast(`${s.title} установлен${r?.files?.length > 1 ? ` + ${r.files.length - 1} зависимостей` : ''}`);
+      renderInstalledMods();
+    } catch { return false; }
+  }
+  return true;
+}
+
 async function installMod(hit, versionId, btn) {
   const ctx = modCtx();
   if (ctx.kind === 'modpack') return installModpack(hit, versionId, btn);
   if (!ctx.instance) return toast('Сначала выберите сборку', 'err');
+  if (ctx.kind === 'shader' && !(await ensureShaderLoader(ctx.instance))) return;
   const old = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
   try {
@@ -856,7 +966,7 @@ async function openVersions(hit, ctx) {
   const body = $('#modal-body');
   body.innerHTML = '<div class="note-center"><span class="spin"></span> загрузка версий…</div>';
   try {
-    const list = await call(app.mods.versions(hit.source, hit.id, ctx.mc, ctx.loader));
+    const list = await call(app.mods.versions(hit.source, hit.id, ctx.mc, ctx.loader, ctx.kind));
     if (!list.length) { body.innerHTML = '<div class="note-center">нет совместимых версий</div>'; return; }
     body.innerHTML = '';
     for (const v of list.slice(0, 60)) {

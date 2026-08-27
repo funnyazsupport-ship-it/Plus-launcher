@@ -46,6 +46,23 @@ const DEFAULTS = {
   // и client id Microsoft лежат в app-config.js — это настройки разработчика.
   discordEnabled: true,
   discordShowInstance: true,
+  // Друзья: имя и адрес, который они дали. Лаунчер раскладывает их
+  // по спискам серверов внутри игры, чтобы не вводить адрес руками.
+  friends: [],
+  // Пускать ли друзей к себе. Выключено — перенаправитель никого не примет.
+  friendsIncoming: true,
+  // Релей — машина с постоянным адресом, через которую друзья попадают в мир.
+  // Роутер не пускает внутрь никого, поэтому лаунчер звонит туда сам.
+  // Пусто — значит труба выключена и мир виден только в домашней сети.
+  // Учётка на сервере друзей. Порт закреплён за ником навсегда, поэтому адрес,
+  // который получает друг, не протухает после перезапуска игры.
+  // Сам адрес сервера человеку не показывается — он в app-config.js.
+  relayNick: '',
+  relayPass: '',
+  // Правила Minecraft (EULA) для своего сервера. Согласие спрашивается один раз
+  // и именно у человека: принять его за него лаунчер не вправе.
+  eulaAccepted: false,
+  serverRam: 2048,
   accounts: [],
   activeAccount: null,
   instances: [],
@@ -171,7 +188,8 @@ const hasOwnCurseforgeKey = () => Boolean(secret.decrypt(load().curseforgeKeyEnc
  * (или зашифроваться до готовности системного хранилища).
  */
 /** Настройки, переехавшие в app-config.js: чистим, чтобы не путали в config.json */
-const MOVED_TO_CODE = ['discordAppId', 'discordImage', 'updateRepo', 'msClientId'];
+const MOVED_TO_CODE = ['discordAppId', 'discordImage', 'updateRepo', 'msClientId',
+  'relayHost', 'relayPort', 'relayKey'];
 
 function dropMovedKeys() {
   const cfg = load();

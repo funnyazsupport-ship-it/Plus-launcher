@@ -23,6 +23,8 @@ const mix = (text) => Buffer.from(Buffer.from(String(text), 'utf8').map((b) => b
 const keys = {
   curseforge: process.env.CURSEFORGE_KEY || '',
   deepseek: process.env.DEEPSEEK_KEY || '',
+  // пропуск на сервер друзей: без него на нём нельзя завести ник
+  relay: process.env.RELAY_KEY || '',
 };
 
 const given = Object.entries(keys).filter(([, v]) => v);
@@ -50,7 +52,7 @@ ${blobs}
 
 const unmix = (blob) => Buffer.from(Buffer.from(blob, 'base64').map((b) => b ^ MASK)).toString('utf8');
 
-/** @param {'curseforge'|'deepseek'} name */
+/** @param {'curseforge'|'deepseek'|'relay'} name */
 function embeddedKey(name = 'curseforge') {
   return BLOBS[name] ? unmix(BLOBS[name]) : '';
 }

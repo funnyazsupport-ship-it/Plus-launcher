@@ -76,7 +76,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   mods: {
     search: (opts) => invoke('mods:search', opts),
-    versions: (source, projectId, mc, loader) => invoke('mods:versions', source, projectId, mc, loader),
+    versions: (source, projectId, mc, loader, kind) => invoke('mods:versions', source, projectId, mc, loader, kind),
     info: (source, projectId) => invoke('mods:info', source, projectId),
     install: (opts) => invoke('mods:install', opts),
     installed: (instance, kind) => invoke('mods:installed', instance, kind),
@@ -92,6 +92,8 @@ contextBridge.exposeInMainWorld('api', {
     applyUpdates: (opts) => invoke('mods:applyUpdates', opts),
     checkApi: (instanceId) => invoke('mods:checkApi', instanceId),
     installApi: (opts) => invoke('mods:installApi', opts),
+    shaderSupport: (instanceId) => invoke('mods:shaderSupport', instanceId),
+    installShaderLoader: (opts) => invoke('mods:installShaderLoader', opts),
   },
   backups: {
     worlds: (id) => invoke('backups:worlds', id),
@@ -130,13 +132,45 @@ contextBridge.exposeInMainWorld('api', {
     chatRemove: (id) => invoke('chats:remove', id),
     chatsClear: () => invoke('chats:clear'),
   },
+  friends: {
+    list: () => invoke('friends:list'),
+    add: (data) => invoke('friends:add', data),
+    remove: (id) => invoke('friends:remove', id),
+    update: (id, patch) => invoke('friends:update', id, patch),
+    sync: () => invoke('friends:sync'),
+    open: () => invoke('friends:open'),
+    status: () => invoke('friends:status'),
+    play: (data) => invoke('friends:play', data),
+    installPack: (data) => invoke('friends:installPack', data),
+  },
+  tunnel: {
+    state: () => invoke('tunnel:state'),
+    start: (data) => invoke('tunnel:start', data),
+    stop: () => invoke('tunnel:stop'),
+    account: () => invoke('tunnel:account'),
+    register: (data) => invoke('tunnel:register', data),
+    login: (data) => invoke('tunnel:login', data),
+    logout: () => invoke('tunnel:logout'),
+  },
+  server: {
+    state: () => invoke('server:state'),
+    worlds: (instanceId) => invoke('server:worlds', instanceId),
+    start: (data) => invoke('server:start', data),
+    play: (data) => invoke('server:play', data),
+    stop: () => invoke('server:stop'),
+  },
+  share: {
+    state: () => invoke('share:state'),
+    start: (port) => invoke('share:start', port),
+    stop: () => invoke('share:stop'),
+  },
   game: {
     launch: (opts) => invoke('game:launch', opts),
     kill: () => invoke('game:kill'),
     running: () => invoke('game:running'),
   },
   on: (channel, cb) => {
-    const allowed = ['progress', 'auth:code', 'game:log', 'game:exit', 'game:crash', 'discord:status', 'packfile:open'];
+    const allowed = ['progress', 'auth:code', 'game:log', 'game:exit', 'game:crash', 'discord:status', 'packfile:open', 'share:state', 'tunnel:state', 'server:state'];
     if (!allowed.includes(channel)) return () => {};
     const listener = (_e, payload) => cb(payload);
     ipcRenderer.on(channel, listener);

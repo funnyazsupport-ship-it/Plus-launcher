@@ -39,6 +39,18 @@ function subst(str, vars) {
   return String(str).replace(/\$\{([a-z_]+)\}/gi, (m, k) => (k in vars ? String(vars[k]) : m));
 }
 
+/** Разбирает «куда заходить»: host или host:port. Порт по умолчанию — обычный игровой */
+function parseJoin(value) {
+  const s = String(value || '').trim();
+  if (!s) return null;
+  // первый знак только буква или цифра: иначе «--fullscreen» сошло бы за имя хоста
+  // и уехало бы в командную строку java отдельным аргументом
+  const m = s.match(/^([a-zA-Z0-9][a-zA-Z0-9.\-_]*)(?::(\d{1,5}))?$/);
+  if (!m) return null;
+  const port = m[2] ? Number(m[2]) : 25565;
+  return port > 0 && port < 65536 ? { host: m[1], port } : null;
+}
+
 /** Сборка classpath: все библиотеки версии + client.jar (по одной версии каждой библиотеки) */
 function buildClasspath(v) {
   const cp = [];
@@ -110,12 +122,24 @@ async function launch(opt, onEvent = () => {}) {
     resolution_height: String(config.height || 720),
   };
 
+  /*
+   * Заход сразу в мир друга, без списка серверов.
+   *
+   * Старые версии понимают --server и --port, начиная с 1.20 появился
+   * --quickPlayMultiplayer. Что именно поддерживает эта версия, видно по её же
+   * описанию аргументов: гадать по номеру версии нельзя, форматы у сборок разные.
+   */
+  const join = parseJoin(opt.join);
+  const quickPlay = Boolean(join)
+    && JSON.stringify(v.arguments?.game || '').includes('quickPlayMultiplayer');
+  if (join) vars.quickPlayMultiplayer = `${join.host}:${join.port}`;
+
   const features = {
     is_demo_user: false,
     has_custom_resolution: !config.fullscreen,
-    has_quick_plays_support: false,
+    has_quick_plays_support: quickPlay,
     is_quick_play_singleplayer: false,
-    is_quick_play_multiplayer: false,
+    is_quick_play_multiplayer: quickPlay,
     is_quick_play_realms: false,
   };
 
@@ -147,6 +171,11 @@ async function launch(opt, onEvent = () => {}) {
 
   if (config.fullscreen && !game.includes('--fullscreen')) game.push('--fullscreen');
   else if (!v.arguments?.game && !game.includes('--width')) game.push('--width', vars.resolution_width, '--height', vars.resolution_height);
+
+  // Версия про quickPlay не знает — заходим по-старому
+  if (join && !game.includes('--quickPlayMultiplayer') && !game.includes('--server')) {
+    game.push('--server', join.host, '--port', String(join.port));
+  }
 
   const args = [...jvm, v.mainClass, ...game];
   if (opt.dryRun) return { javaPath, args, classpath, gameDir, nativesDir };
@@ -183,4 +212,4 @@ async function launch(opt, onEvent = () => {}) {
   return child;
 }
 
-module.exports = { launch, buildClasspath };
+module.exports = { launch, buildClasspath, parseJoin };

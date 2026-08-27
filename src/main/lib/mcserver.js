@@ -1,0 +1,293 @@
+'use strict';
+const fs = require('fs');
+const fsp = require('fs/promises');
+const path = require('path');
+const { spawn } = require('child_process');
+
+const { dirs, gameDir } = require('./paths');
+const { getJSON, download } = require('./net');
+const versions = require('./versions');
+const java = require('./java');
+
+/*
+ * Свой сервер для игры с другом.
+ *
+ * «Открыть для сети» из самой игры не годится: встроенный сервер проверяет
+ * сессию входящего на серверах авторизации, и любой аккаунт без сессии
+ * отлетает с «Invalid session». Обойти это в игре нельзя — проверку делает
+ * она сама, и никакие настройки лаунчера на неё не влияют.
+ *
+ * Настоящий сервер такую проверку умеет выключать: online-mode=false. Тогда
+ * заходят любые аккаунты, и модов не нужно ни хозяину, ни гостю.
+ *
+ * Мир не копируется: сервер запускается прямо в папке сборки, а level-name
+ * указывает внутрь saves. Иначе у человека было бы два разных мира с одним
+ * названием, и он бы не понимал, в каком из них его постройки.
+ */
+
+const FABRIC_META = 'https://meta.fabricmc.net/v2';
+const QUILT_META = 'https://meta.quiltmc.org/v3';
+const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
+const NEO_MAVEN = 'https://maven.neoforged.net/releases/net/neoforged/neoforge';
+
+// Где установщик Forge и NeoForge оставляет список аргументов запуска
+const ARGS_DIR = { forge: 'net/minecraftforge/forge', neoforge: 'net/neoforged/neoforge' };
+const ARGS_FILE = process.platform === 'win32' ? 'win_args.txt' : 'unix_args.txt';
+const READY = /Done \([\d.]+s\)!/;
+const PORT_LINE = /Starting Minecraft server on [^:]*:(\d{2,5})/;
+const STOP_MS = 20000;                 // столько ждём, пока сервер сохранит мир и выйдет
+
+/** Папка, куда складываем серверные jar-файлы */
+const jarDir = () => path.join(dirs.cache, 'server');
+
+/** Сервер запущен? Разбираем строку журнала */
+const isReady = (line) => READY.test(String(line || ''));
+
+/** Порт, на котором сервер в итоге поднялся */
+function portFrom(line) {
+  const m = String(line || '').match(PORT_LINE);
+  if (!m) return null;
+  const port = Number(m[1]);
+  return port > 0 && port < 65536 ? port : null;
+}
+
+/**
+ * Настройки сервера.
+ * online-mode=false — то, ради чего всё затевалось. Остальное подобрано так,
+ * чтобы мир вёл себя как одиночный: те же правила, никакого списка белых.
+ */
+function propertiesFor({ port, world, motd = 'Мир друга' }) {
+  return [
+    '# создано Plus Launcher',
+    'online-mode=false',
+    `server-port=${Number(port) || 25565}`,
+    `level-name=${String(world).replace(/\\/g, '/')}`,
+    `motd=${motd}`,
+    'enable-command-block=true',
+    'allow-flight=true',
+    'max-players=8',
+    'view-distance=10',
+    'sync-chunk-writes=false',
+    'enforce-secure-profile=false',
+    '',
+  ].join('\n');
+}
+
+/** Миры сборки — из них человек выбирает, какой открыть */
+async function worlds(inst) {
+  const saves = path.join(gameDir(inst.folder || inst.mc || inst.id), 'saves');
+  let names;
+  try {
+    names = await fsp.readdir(saves, { withFileTypes: true });
+  } catch {
+    return [];                         // играли только на серверах — своих миров нет
+  }
+  const out = [];
+  for (const d of names) {
+    if (!d.isDirectory()) continue;
+    // папка без level.dat — это не мир, а мусор рядом
+    if (!fs.existsSync(path.join(saves, d.name, 'level.dat'))) continue;
+    let played = 0;
+    try { played = (await fsp.stat(path.join(saves, d.name, 'level.dat'))).mtimeMs; } catch { /* неважно */ }
+    out.push({ name: d.name, played });
+  }
+  return out.sort((a, b) => b.played - a.played);
+}
+
+/** Серверный файл ванильной игры — он же годится для сборок с OptiFine */
+async function vanillaJar(inst, onProgress) {
+  const v = await versions.resolve(inst.versionId);
+  const server = v.downloads?.server;
+  if (!server?.url) throw new Error(`Для Minecraft ${inst.mc} нет серверного файла`);
+  const file = path.join(jarDir(), `minecraft-${inst.mc}.jar`);
+  onProgress({ stage: 'Скачиваю сервер Minecraft', percent: 20 });
+  await download(server.url, file, { sha1: server.sha1, size: server.size });
+  return file;
+}
+
+/** Fabric отдаёт готовый серверный файл — своего установщика гонять не нужно */
+async function fabricJar(inst, onProgress) {
+  const installers = await getJSON(`${FABRIC_META}/versions/installer`);
+  const installer = (installers.find((i) => i.stable) || installers[0])?.version;
+  if (!installer) throw new Error('Fabric не отдал список установщиков');
+  const file = path.join(jarDir(), `fabric-${inst.mc}-${inst.loaderVersion}-${installer}.jar`);
+  onProgress({ stage: 'Скачиваю сервер Fabric', percent: 20 });
+  await download(`${FABRIC_META}/versions/loader/${inst.mc}/${inst.loaderVersion}/${installer}/server/jar`, file);
+  return file;
+}
+
+/** Запускает чужой установщик и ждёт его молча — говорить будем сами */
+function runJar(javaPath, args, cwd, onProgress, what) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(javaPath, args, { cwd, windowsHide: true });
+    let log = '';
+    const watch = (d) => {
+      log += d;
+      const line = String(d).trim().split('\n').pop();
+      if (line) onProgress({ stage: what, percent: 50, detail: line.slice(0, 90) });
+    };
+    p.stdout.on('data', watch);
+    p.stderr.on('data', watch);
+    p.on('error', reject);
+    p.on('close', (code) => (code === 0
+      ? resolve()
+      : reject(new Error(`${what}: установщик вышел с кодом ${code}\n${log.slice(-600)}`))));
+  });
+}
+
+/**
+ * Готовит серверную часть сборки и возвращает аргументы запуска java.
+ *
+ * У каждого загрузчика свой путь. Fabric отдаёт готовый файл. Quilt, Forge и
+ * NeoForge — только установщик, который надо прогнать один раз в папке сервера.
+ * OptiFine серверной части не имеет вовсе: он про то, как игра рисует картинку,
+ * и на стороне сервера ему делать нечего — берём ванильный.
+ */
+async function serverArgs(inst, dir, opt, onProgress = () => {}) {
+  const loader = inst.loader || 'vanilla';
+  const ram = `-Xmx${opt.ram || 2048}M`;
+  const javaPath = opt.javaPath;
+
+  if (loader === 'fabric') return [ram, '-jar', await fabricJar(inst, onProgress), 'nogui'];
+  if (loader === 'vanilla' || loader === 'optifine') {
+    return [ram, '-jar', await vanillaJar(inst, onProgress), 'nogui'];
+  }
+
+  if (loader === 'quilt') {
+    const launch = path.join(dir, 'quilt-server-launch.jar');
+    if (!fs.existsSync(launch)) {
+      const list = await getJSON(`${QUILT_META}/versions/installer`);
+      const url = (list.find((i) => i.url) || {}).url;
+      if (!url) throw new Error('Quilt не отдал установщик');
+      const jar = path.join(jarDir(), path.basename(new URL(url).pathname));
+      onProgress({ stage: 'Скачиваю установщик Quilt', percent: 20 });
+      await download(url, jar);
+      onProgress({ stage: 'Ставлю сервер Quilt', percent: 35 });
+      await runJar(javaPath, ['-jar', jar, 'install', 'server', inst.mc, inst.loaderVersion,
+        `--install-dir=${dir}`, '--download-server'], dir, onProgress, 'Quilt');
+    }
+    return [ram, '-jar', launch, 'nogui'];
+  }
+
+  if (loader === 'forge' || loader === 'neoforge') {
+    // Установщик кладёт список аргументов рядом с библиотеками. Он длинный —
+    // там весь classpath, — поэтому java читает его из файла, а не из строки.
+    const argsPath = path.join(dir, 'libraries', ARGS_DIR[loader], String(inst.loaderVersion), ARGS_FILE);
+
+    /*
+     * Старые Forge (до 1.17) списка аргументов не делают вовсе — там обычный
+     * jar рядом. Поэтому «уже установлено» проверяем по обоим признакам:
+     * иначе на каждый запуск такой сборки установщик гонялся бы заново.
+     */
+    const readyJar = () => {
+      let files;
+      try { files = fs.readdirSync(dir); } catch { return null; }
+      const skip = /installer|shim|sources|javadoc/i;
+      return files.find((f) => /^(forge|neoforge).*\.jar$/i.test(f) && !skip.test(f))
+        || files.find((f) => /^minecraft_server.*\.jar$/i.test(f))
+        || null;
+    };
+
+    if (!fs.existsSync(argsPath) && !readyJar()) {
+      const url = loader === 'forge'
+        ? `${FORGE_MAVEN}/${inst.loaderVersion}/forge-${inst.loaderVersion}-installer.jar`
+        : `${NEO_MAVEN}/${inst.loaderVersion}/neoforge-${inst.loaderVersion}-installer.jar`;
+      const jar = path.join(jarDir(), path.basename(new URL(url).pathname));
+      onProgress({ stage: `Скачиваю установщик ${loader}`, percent: 20 });
+      await download(url, jar);
+      onProgress({ stage: `Ставлю сервер ${loader} — это займёт минуту`, percent: 35 });
+      await fsp.mkdir(dir, { recursive: true });
+      await runJar(javaPath, ['-jar', jar, '--installServer', dir], dir, onProgress, loader);
+    }
+
+    if (fs.existsSync(argsPath)) {
+      // путь относительно папки сервера: в самом файле пути тоже относительные
+      const rel = path.relative(dir, argsPath).replace(/\\/g, '/');
+      return [ram, `@${rel}`, 'nogui'];
+    }
+
+    const jar = readyJar();
+    if (!jar) throw new Error(`Установщик ${loader} не оставил файла для запуска сервера`);
+    return [ram, '-jar', jar, 'nogui'];
+  }
+
+  // Незнакомый загрузчик: ванильный сервер — самое безопасное, что можно дать
+  return [ram, '-jar', await vanillaJar(inst, onProgress), 'nogui'];
+}
+
+let proc = null;
+let ready = false;
+let boundPort = null;
+
+const state = () => ({ running: Boolean(proc), ready, port: boundPort });
+
+/**
+ * Поднимает сервер с миром сборки.
+ * @param {object} inst сборка
+ * @param {string} world название мира внутри saves
+ * @param {object} opt port — на каком порту слушать, eula — согласие принято
+ */
+async function start(inst, world, opt = {}, onEvent = () => {}) {
+  if (proc) throw new Error('Сервер уже запущен');
+  if (!opt.eula) throw new Error('Нужно принять правила Minecraft (EULA)');
+  if (!world) throw new Error('Не выбран мир');
+
+  const dir = gameDir(inst.folder || inst.mc || inst.id);
+  if (!fs.existsSync(path.join(dir, 'saves', world, 'level.dat'))) {
+    throw new Error(`Мир «${world}» не найден`);
+  }
+
+  await fsp.mkdir(jarDir(), { recursive: true });
+
+  onEvent('progress', { stage: 'Проверка Java', percent: 10 });
+  const major = java.requiredMajor(await versions.resolve(inst.versionId));
+  const javaPath = await java.ensure(major, opt.javaPath, (p) => onEvent('progress', p));
+
+  const args = await serverArgs(inst, dir, { ...opt, javaPath }, (p) => onEvent('progress', p));
+
+  // Согласие спрашивает лаунчер, здесь только записываем ответ:
+  // без файла сервер откажется стартовать и напишет об этом в консоль.
+  await fsp.writeFile(path.join(dir, 'eula.txt'), 'eula=true\n');
+  await fsp.writeFile(
+    path.join(dir, 'server.properties'),
+    propertiesFor({ port: opt.port || 0, world: `saves/${world}`, motd: `${inst.name} — Plus Launcher` }),
+  );
+
+  onEvent('progress', { stage: 'Запуск сервера', percent: 80 });
+  ready = false;
+  boundPort = null;
+  proc = spawn(javaPath, args, { cwd: dir, windowsHide: true });
+
+  const line = (chunk) => {
+    for (const s of String(chunk).split(/\r?\n/)) {
+      if (!s.trim()) continue;
+      onEvent('log', s);
+      const p = portFrom(s);
+      if (p) boundPort = p;
+      if (isReady(s)) { ready = true; onEvent('ready', state()); }
+    }
+  };
+  proc.stdout.on('data', line);
+  proc.stderr.on('data', line);
+  proc.on('exit', (code) => {
+    proc = null;
+    ready = false;
+    boundPort = null;
+    onEvent('exit', { code });
+  });
+
+  return state();
+}
+
+/** Просит сервер выйти по-хорошему: иначе мир останется недосохранённым */
+function stop() {
+  if (!proc) return Promise.resolve(true);
+  const child = proc;
+  return new Promise((resolve) => {
+    const kill = setTimeout(() => { try { child.kill(); } catch { /* уже мёртв */ } }, STOP_MS);
+    child.once('exit', () => { clearTimeout(kill); resolve(true); });
+    try { child.stdin.write('stop\n'); } catch { child.kill(); }
+  });
+}
+
+module.exports = { start, stop, state, worlds, propertiesFor, isReady, portFrom, serverArgs };

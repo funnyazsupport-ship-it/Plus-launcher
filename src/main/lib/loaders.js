@@ -107,8 +107,46 @@ async function installMetaProfile(url, id) {
   return realId;
 }
 
+/** Готов ли профиль версии: папка есть и в ней лежит её json */
+function profileReady(id) {
+  try {
+    return Boolean(id) && fs.existsSync(path.join(dirs.versions, id, `${id}.json`));
+  } catch { return false; }
+}
+
+/**
+ * Как установщик назовёт папку версии.
+ * Forge: 1.20.1-forge-47.4.23, NeoForge: neoforge-21.1.95.
+ * Точное имя знает только сам установщик, поэтому это ожидание, а не правило —
+ * если не совпадёт, ниже сработает поиск по появившимся папкам.
+ */
+function expectedProfile(loader, mc, loaderVersion) {
+  if (!loaderVersion) return null;
+  if (loader === 'neoforge') return `neoforge-${loaderVersion}`;
+  if (loader === 'forge') {
+    const short = String(loaderVersion).startsWith(`${mc}-`)
+      ? String(loaderVersion).slice(mc.length + 1)
+      : loaderVersion;
+    return `${mc}-forge-${short}`;
+  }
+  return null;
+}
+
+async function runInstaller(url, mc, onProgress, expected = null) {
+  /*
+   * Тот же загрузчик уже стоит — установщик просто ничего не создаст, и раньше
+   * это принималось за ошибку «не создал профиль версии». Проверяем заранее
+   * и не гоняем установщик впустую.
+   */
+  if (profileReady(expected)) {
+    onProgress({ stage: 'Загрузчик уже установлен', percent: 90 });
+    return expected;
+  }
+  return runInstallerReal(url, mc, onProgress, expected);
+}
+
 /** Запускает официальный установщик Forge/NeoForge в headless-режиме */
-async function runInstaller(url, mc, onProgress) {
+async function runInstallerReal(url, mc, onProgress, expected) {
   const jar = path.join(dirs.cache, path.basename(new URL(url).pathname));
   onProgress({ stage: 'Загрузка установщика', percent: 10 });
   await download(url, jar);
@@ -140,8 +178,23 @@ async function runInstaller(url, mc, onProgress) {
 
   const after = fs.readdirSync(dirs.versions);
   const created = after.filter((d) => !before.has(d));
-  const id = created.find((d) => /forge/i.test(d)) || created[0];
-  if (!id) throw new Error('Установщик не создал профиль версии');
+  let id = created.find((d) => /forge/i.test(d)) || created[0];
+
+  /*
+   * Новой папки нет — это ещё не провал. Установщик мог обновить уже готовый
+   * профиль (тогда он в списке не «новый») или назвать папку иначе, чем мы ждали.
+   * Сначала смотрим ожидаемое имя, потом ищем среди готовых профилей подходящий
+   * по версии — и только если и там пусто, признаём неудачу.
+   */
+  if (!id && profileReady(expected)) id = expected;
+  if (!id && expected) {
+    const tail = String(expected).split('-').pop();          // номер сборки загрузчика
+    id = after.find((d) => profileReady(d) && d.includes(tail) && /forge/i.test(d)) || null;
+  }
+  if (!id) {
+    throw new Error('Установщик не создал профиль версии. '
+      + 'Попробуйте другую сборку загрузчика или проверьте, что антивирус не мешает установщику.');
+  }
   return id;
 }
 
@@ -169,10 +222,12 @@ async function install(loader, mc, loaderVersion, onProgress = () => {}) {
       profileId('quilt', mc, loaderVersion));
   } else if (loader === 'forge') {
     id = await runInstaller(`${FORGE_MAVEN}/${loaderVersion}/forge-${loaderVersion}-installer.jar`, mc,
-      (p) => onProgress({ ...p, percent: 50 + Math.round(p.percent * 0.3) }));
+      (p) => onProgress({ ...p, percent: 50 + Math.round(p.percent * 0.3) }),
+      expectedProfile('forge', mc, loaderVersion));
   } else if (loader === 'neoforge') {
     id = await runInstaller(`${NEO_MAVEN}/${loaderVersion}/neoforge-${loaderVersion}-installer.jar`, mc,
-      (p) => onProgress({ ...p, percent: 50 + Math.round(p.percent * 0.3) }));
+      (p) => onProgress({ ...p, percent: 50 + Math.round(p.percent * 0.3) }),
+      expectedProfile('neoforge', mc, loaderVersion));
   } else {
     throw new Error(`Неизвестный загрузчик: ${loader}`);
   }
@@ -182,4 +237,4 @@ async function install(loader, mc, loaderVersion, onProgress = () => {}) {
   return id;
 }
 
-module.exports = { list: list_, install, profileId, neoMatches, resolveVersion };
+module.exports = { list: list_, install, profileId, neoMatches, resolveVersion, expectedProfile };

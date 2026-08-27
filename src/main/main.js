@@ -26,6 +26,10 @@ const updater = require('./lib/updater');
 const discord = require('./lib/discord');
 const ai = require('./lib/ai');
 const chats = require('./lib/chats');
+const share = require('./lib/share');
+const tunnel = require('./lib/tunnel');
+const mcserver = require('./lib/mcserver');
+const friendsLib = require('./lib/friends');
 const mirrors = require('./lib/mirrors');
 const connectivity = require('./lib/connectivity');
 const appConfig = require('./lib/app-config');
@@ -693,7 +697,7 @@ handle('instances:folder', (id) => {
 
 // ---------- моды ----------
 handle('mods:search', (opts) => mods.search(opts));
-handle('mods:versions', (source, projectId, mc, loader) => mods.versionsFor(source, projectId, mc, loader));
+handle('mods:versions', (source, projectId, mc, loader, kind) => mods.versionsFor(source, projectId, mc, loader, kind));
 handle('mods:info', (source, projectId) => mods.projectInfo(source, projectId));
 handle('mods:install', ({ taskId, ...opts }) => mods.install(opts, progress(taskId)));
 handle('mods:installed', (instance, kind) => mods.listInstalled(instance, kind));
@@ -740,6 +744,9 @@ handle('mods:updates', ({ taskId, instance, kind, unstable }) =>
 handle('mods:applyUpdates', ({ taskId, instance, kind, items }) => modUpdates.apply(instance, items, kind, progress(taskId)));
 handle('mods:checkApi', (instanceId) => mods.missingLoaderApi(instanceId));
 handle('mods:installApi', ({ taskId, instanceId }) => mods.installLoaderApi(instanceId, progress(taskId)));
+// шейдеры не работают без Iris или Oculus — проверяем и предлагаем поставить
+handle('mods:shaderSupport', (instanceId) => mods.shaderSupport(instanceId));
+handle('mods:installShaderLoader', ({ taskId, instanceId }) => mods.installShaderLoader(instanceId, progress(taskId)));
 
 // ---------- скины ----------
 handle('skins:list', () => skins.list());
@@ -876,6 +883,259 @@ handle('ai:chat', ({ messages, context, noTools }) =>
 handle('ai:cancel', () => ai.cancel());
 
 // ---------- история переписок с помощником ----------
+// ---------- игра с другом: перенаправитель на постоянный порт ----------
+// ---------- друзья ----------
+handle('friends:list', () => friendsLib.list());
+
+/** Куда ходить за учётками и чужими адресами. Человеку это не показывается. */
+const relay = () => ({ host: appConfig.relayHost, port: appConfig.relayPort, key: appConfig.relayKey });
+
+handle('friends:add', async ({ nick }) => {
+  // адрес спрашиваем у сервера: человек знает только ник друга
+  const found = await tunnel.lookup({ ...relay(), nick });
+  const f = friendsLib.add({ name: found.nick, nick: found.nick, address: found.address });
+  await friendsLib.syncAll();
+  return { ...f, online: found.online, pack: found.pack };
+});
+
+/**
+ * Подходит ли сборка для захода к другу.
+ * Версия и загрузчик должны совпасть — иначе игра до сервера не достучится.
+ */
+const fitsPack = (inst, pack) => !pack
+  || (inst.mc === pack.mc && (inst.loader || 'vanilla') === pack.loader);
+
+const instanceFor = (pack) => {
+  const cfg = config.load();
+  return cfg.instances.find((i) => i.id === cfg.lastInstance && fitsPack(i, pack))
+    || cfg.instances.find((i) => fitsPack(i, pack))
+    || null;
+};
+
+/** Кто из друзей сейчас в сети, на какой сборке и есть ли у нас такая же */
+handle('friends:status', async () => {
+  const out = [];
+  for (const f of friendsLib.list()) {
+    try {
+      const found = await tunnel.lookup({ ...relay(), nick: f.nick || f.name });
+      out.push({
+        id: f.id,
+        online: found.online,
+        connected: found.connected,
+        pack: found.pack,
+        address: found.address,
+        // нечего ставить — значит кнопка «играть» сработает сразу
+        ready: Boolean(instanceFor(found.pack)),
+      });
+    } catch {
+      // сервер недоступен или ник удалили — считаем, что друга нет в сети
+      out.push({ id: f.id, online: false, connected: false, pack: null, address: f.address, ready: true });
+    }
+  }
+  return out;
+});
+
+/** Ставит себе сборку друга: моды из каталога скачиваются, свои — нет */
+handle('friends:installPack', async ({ taskId, id }) => {
+  const f = friendsLib.list().find((x) => x.id === id);
+  if (!f) throw new Error('Друг не найден');
+  const pack = await tunnel.pack({ ...relay(), nick: f.nick || f.name });
+  if (!pack) throw new Error('Друг не поделился сборкой');
+  return packfile.install(pack, { name: `${pack.name} (${f.name})`, createInstance }, progress(taskId));
+});
+handle('friends:remove', async (id) => { friendsLib.remove(id); await friendsLib.syncAll(); return true; });
+handle('friends:update', async (id, patch) => { const f = friendsLib.update(id, patch); await friendsLib.syncAll(); return f; });
+handle('friends:sync', () => friendsLib.syncAll());
+
+// окно друзей — отдельное, как и помощник
+let friendsWin = null;
+handle('friends:open', () => {
+  if (friendsWin && !friendsWin.isDestroyed()) { friendsWin.focus(); return true; }
+  friendsWin = new BrowserWindow({
+    width: 620, height: 700, minWidth: 480, minHeight: 480,
+    frame: false, backgroundColor: '#0d0f18', title: 'Друзья — Plus Launcher',
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
+  });
+  friendsWin.loadFile(path.join(__dirname, '..', 'renderer', 'friends.html'));
+  // Ошибка в сценарии окна обрывает подключение кнопок, и снаружи это выглядит
+  // как «нажимаю, и ничего». Пусть она хотя бы видна в консоли лаунчера.
+  friendsWin.webContents.on('console-message', (_e, level, message, lineNo, source) => {
+    if (level >= 2) console.warn(`[друзья] ${message} (${source}:${lineNo})`);
+  });
+  friendsWin.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  friendsWin.on('closed', () => { friendsWin = null; });
+  return true;
+});
+
+handle('share:state', () => share.state());
+handle('share:start', (port) => share.start(port, (kind, st) => send('share:state', st)));
+handle('share:stop', () => { tunnel.stop(); return share.stop(); });
+
+handle('tunnel:state', () => tunnel.state());
+handle('tunnel:stop', () => tunnel.stop());
+
+/**
+ * Кто мы на сервере друзей.
+ *
+ * Запомненному нику верим не на слово: учётку могли завести на другом
+ * компьютере и не довести до конца, и тогда человек попадал бы в меню, где
+ * ничего не работает. Но и выбрасывать на вход из-за упавшей сети нельзя —
+ * поэтому «не пустили» и «не дозвонились» различаем.
+ */
+handle('tunnel:account', async () => {
+  const cfg = config.load();
+  const nick = cfg.relayNick || '';
+  /*
+   * Игра проверяет сессию входящего даже у мира, открытого «для сети».
+   * У пиратского аккаунта сессии нет, и друг получает «Invalid session» —
+   * ошибку, по которой невозможно догадаться, что дело в аккаунте.
+   */
+  const player = cfg.accounts.find((a) => a.uuid === cfg.activeAccount) || cfg.accounts[0];
+  const offlineAccount = player ? player.type === 'offline' : false;
+
+  if (!nick || !cfg.relayPass) return { nick, saved: false, offlineAccount };
+  try {
+    const acc = await tunnel.auth({ ...relay(), nick, pass: cfg.relayPass });
+    return { nick: acc.nick, saved: true, offlineAccount };
+  } catch (e) {
+    const refused = /нет|пароль|ключ/i.test(e.message);
+    return {
+      nick,
+      saved: !refused,
+      offlineAccount,
+      error: refused ? e.message : null,
+    };
+  }
+});
+
+handle('tunnel:register', async ({ nick, pass }) => {
+  const acc = await tunnel.register({ ...relay(), nick, pass });
+  // ник заведён — запоминаем, чтобы дальше входить самому
+  config.save({ relayNick: acc.nick, relayPass: pass });
+  return { nick: acc.nick };
+});
+
+/** Вход: пароль проверяет сервер, запоминаем только если подошёл */
+handle('tunnel:login', async ({ nick, pass }) => {
+  const acc = await tunnel.auth({ ...relay(), nick, pass });
+  config.save({ relayNick: acc.nick, relayPass: pass });
+  return { nick: acc.nick };
+});
+
+handle('tunnel:logout', () => {
+  tunnel.stop();
+  config.save({ relayNick: '', relayPass: '' });
+  return true;
+});
+
+/** Описание сборки, на которой играем — чтобы друг мог поставить себе такую же */
+async function myPack(instanceId) {
+  if (!instanceId) return undefined;
+  try {
+    const { data, bundle } = await packfile.build(instanceId);
+    // свои моды, которых нет в каталогах, по этой дороге не проедут:
+    // передаётся только описание, а не файлы
+    return { ...data, bundled: [], localMods: bundle.length };
+  } catch {
+    return undefined;              // не вышло описать сборку — не повод не пускать друзей
+  }
+}
+
+async function startTunnel(instanceId) {
+  const cfg = config.load();
+  if (!cfg.relayNick || !cfg.relayPass) throw new Error('Сначала войдите под своим ником');
+
+  // Труба ведёт не в игру, а в перенаправитель: порт мира меняется при каждом
+  // запуске, и знает о нём только он. Порт берём любой свободный — снаружи
+  // адрес даёт сервер, а 25565 бывает занят вторым лаунчером или своим сервером.
+  const local = share.state().port || (await share.start(0,
+    (kind, st) => send('share:state', st))).port;
+
+  return tunnel.start(
+    {
+      ...relay(),
+      nick: cfg.relayNick,
+      pass: cfg.relayPass,
+      local,
+      pack: await myPack(instanceId || cfg.lastInstance),
+    },
+    (st) => send('tunnel:state', st),
+  );
+}
+
+handle('tunnel:start', ({ instanceId } = {}) => startTunnel(instanceId));
+
+// ---------- свой сервер: игра с другом на любых аккаунтах ----------
+
+handle('server:state', () => mcserver.state());
+handle('server:worlds', async (instanceId) => {
+  const cfg = config.load();
+  const inst = cfg.instances.find((i) => i.id === (instanceId || cfg.lastInstance)) || cfg.instances[0];
+  if (!inst) throw new Error('Сначала создайте сборку');
+  return { instance: { id: inst.id, name: inst.name, mc: inst.mc, loader: inst.loader || 'vanilla' }, worlds: await mcserver.worlds(inst) };
+});
+
+/** Хозяин заходит в собственный мир — на свой же сервер, но без сети */
+handle('server:play', async ({ taskId, instanceId }) => {
+  const st = mcserver.state();
+  if (!st.running || !st.port) throw new Error('Сервер ещё не поднялся');
+  const cfg = config.load();
+  const inst = cfg.instances.find((i) => i.id === (instanceId || cfg.lastInstance)) || cfg.instances[0];
+  return launchGame({ taskId, instanceId: inst.id, join: `127.0.0.1:${st.port}` });
+});
+
+handle('server:stop', async () => {
+  await mcserver.stop();
+  share.setTarget(null);
+  tunnel.setWorld(false);
+  send('tunnel:state', tunnel.state());
+  return true;
+});
+
+/**
+ * Открывает мир для друзей.
+ *
+ * Не «Открыть для сети» из игры, а настоящий сервер с выключенной проверкой
+ * сессии: иначе друзья с пиратскими аккаунтами получают «Invalid session»,
+ * и сделать с этим на стороне лаунчера нечего.
+ */
+handle('server:start', async ({ taskId, instanceId, world, eula }) => {
+  const cfg = config.load();
+  const inst = cfg.instances.find((i) => i.id === (instanceId || cfg.lastInstance)) || cfg.instances[0];
+  if (!inst) throw new Error('Сначала создайте сборку');
+  if (!cfg.relayNick || !cfg.relayPass) throw new Error('Сначала войдите под своим ником');
+  if (eula) config.save({ eulaAccepted: true });
+
+  const p = progress(taskId);
+  await startTunnel(inst.id);
+
+  await mcserver.start(inst, world, {
+    eula: eula || cfg.eulaAccepted,
+    port: 0,                            // любой свободный: наружу светит сервер друзей
+    ram: cfg.serverRam || 2048,
+    javaPath: config.effectiveFor(inst).javaPath,
+  }, (type, payload) => {
+    if (type === 'progress') p(payload);
+    else if (type === 'log') send('game:log', `[сервер] ${payload}\n`);
+    else if (type === 'ready') {
+      // сервер поднялся — только теперь друзьям есть куда заходить
+      share.setTarget(payload.port);
+      send('share:state', share.state());
+      tunnel.setWorld(true);
+      send('tunnel:state', tunnel.state());
+      send('server:state', mcserver.state());
+    } else if (type === 'exit') {
+      share.setTarget(null);
+      send('share:state', share.state());
+      tunnel.setWorld(false);
+      send('tunnel:state', tunnel.state());
+      send('server:state', mcserver.state());
+    }
+  });
+
+  return { world, instance: inst.name };
+});
+
 handle('chats:list', () => chats.list());
 handle('chats:read', (id) => chats.read(id));
 handle('chats:save', ({ id, messages }) => chats.save(id, messages));
@@ -920,7 +1180,12 @@ handle('ai:explain', async () => {
 });
 
 // ---------- запуск ----------
-handle('game:launch', async ({ taskId, instanceId }) => {
+/**
+ * Запуск игры.
+ * @param {string} join адрес мира друга — тогда игра заходит туда сразу,
+ *   минуя список серверов
+ */
+async function launchGame({ taskId, instanceId, join }) {
   if (gameProcess) throw new Error('Игра уже запущена');
   const cfg = config.load();
   const inst = cfg.instances.find((i) => i.id === instanceId);
@@ -948,16 +1213,32 @@ handle('game:launch', async ({ taskId, instanceId }) => {
 
   // память, Java и JVM-аргументы у сборки могут быть свои — они перекрывают общие
   gameProcess = await launch({
-    versionId: inst.versionId, account, config: config.effectiveFor(inst), gameDir: dir,
+    versionId: inst.versionId, account, config: config.effectiveFor(inst), gameDir: dir, join,
   }, (type, payload) => {
     if (type === 'log') {
       const line = String(payload);
       gameLog.push(line);
       if (gameLog.length > LOG_LINES) gameLog.splice(0, gameLog.length - LOG_LINES);
       send('game:log', line);
+
+      // Мир открыли «для сети» — игра назвала порт. Он каждый раз новый,
+      // поэтому перенаправитель переключаем на него на лету.
+      const lan = share.lanPortFrom(line);
+      if (lan) {
+        share.setTarget(lan);
+        send('share:state', share.state());
+        // мир открыли — только теперь друзьям есть куда заходить
+        tunnel.setWorld(true);
+        send('tunnel:state', tunnel.state());
+      }
     } else if (type === 'progress') p(payload);
     else if (type === 'exit') {
       gameProcess = null;
+      // мир закрылся вместе с игрой — перенаправителю больше некуда слать
+      share.setTarget(null);
+      send('share:state', share.state());
+      tunnel.setWorld(false);
+      send('tunnel:state', tunnel.state());
       send('game:exit', payload);
       presence.playing = false;
       presence.gameSince = null;
@@ -968,6 +1249,12 @@ handle('game:launch', async ({ taskId, instanceId }) => {
       if (payload.code && !lastRun?.killedByUser) explainLastCrash(payload.code);
     }
   });
+
+  // Связь с сервером друзей поднимаем сами, вместе с игрой: заходить в окно
+  // и что-то нажимать ради этого человек не должен.
+  if (!tunnel.state().running) {
+    startTunnel(inst.id).catch((e) => send('game:log', `[друзья] ${e.message}\n`));
+  }
 
   presence.instance = { name: inst.name, mc: inst.mc, loader: inst.loader };
   presence.playing = true;
@@ -981,6 +1268,31 @@ handle('game:launch', async ({ taskId, instanceId }) => {
   });
   if (cfg.closeOnLaunch) win.minimize();
   return { pid: gameProcess.pid };
+}
+
+handle('game:launch', (a) => launchGame(a));
+
+/**
+ * Заход в мир друга одной кнопкой.
+ * Сборку подбираем под ту, на которой играет он: с другой версией игра
+ * до сервера всё равно не достучится.
+ */
+handle('friends:play', async ({ taskId, id }) => {
+  const f = friendsLib.list().find((x) => x.id === id);
+  if (!f) throw new Error('Друг не найден');
+
+  const found = await tunnel.lookup({ ...relay(), nick: f.nick || f.name });
+  if (!found.online) throw new Error(`${f.name} сейчас не открыл мир`);
+
+  const inst = instanceFor(found.pack);
+  if (!inst) {
+    const want = found.pack;
+    throw new Error(want
+      ? `Нужна сборка на Minecraft ${want.mc}${want.loader === 'vanilla' ? '' : ` с ${want.loader}`} — нажмите «Скачать»`
+      : 'Сначала создайте сборку');
+  }
+
+  return launchGame({ taskId, instanceId: inst.id, join: found.address });
 });
 
 handle('game:kill', async () => {

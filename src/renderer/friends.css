@@ -1,0 +1,90 @@
+/* Окно друзей: та же палитра и те же элементы, что у лаунчера */
+
+body.friends-win { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.fbody { flex: 1; overflow-y: auto; padding: 18px 20px 20px; }
+
+/* ---------- строка друга ---------- */
+
+.friend {
+  display: flex; align-items: center; gap: 12px; padding: 11px 12px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  margin-bottom: 7px;
+}
+.friend-mark {
+  width: 34px; height: 34px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: 8px; background: var(--accent-dim); border: 1px solid var(--accent-line);
+}
+.friend-mark svg { width: 17px; height: 17px; color: var(--accent); }
+.friend-body { flex: 1; min-width: 0; }
+.friend-name {
+  font-size: 13.5px; font-weight: 600; margin-bottom: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.friend-addr {
+  font-family: var(--mono); font-size: 11px; color: var(--dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.friend-acts { display: flex; gap: 5px; flex-shrink: 0; align-items: center; }
+.friend-acts button {
+  width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--dim);
+}
+.friend-acts button.wide {
+  width: auto; height: 28px; padding: 0 12px; font-size: 12px; font-weight: 500;
+  color: var(--text);
+}
+.friend-acts button.wide.accent {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent, #0d0f18);
+}
+.friend-acts button.wide.accent:hover:not(:disabled) { filter: brightness(1.08); }
+.friend-acts button svg { width: 13px; height: 13px; }
+.friend-acts button:hover { color: var(--text); border-color: var(--line-2); }
+.friend-acts button.del:hover { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
+.friend-acts button:disabled { opacity: .35; cursor: default; }
+.friend-acts button:disabled:hover { filter: none; }
+
+/* обновление списка друзей */
+.f-refresh {
+  width: 24px; height: 24px; margin-left: 8px; display: grid; place-items: center;
+  cursor: pointer; background: none; border: 0; color: var(--dim);
+}
+.f-refresh svg { width: 14px; height: 14px; }
+.f-refresh:hover { color: var(--text); }
+.f-refresh.spin svg { animation: f-spin 1s linear infinite; }
+@keyframes f-spin { to { transform: rotate(360deg); } }
+
+/* в сети — метка слева, чтобы было видно списком, к кому можно зайти */
+.friend.online .friend-mark { background: var(--accent); border-color: var(--accent); }
+.friend.online .friend-mark svg { color: var(--on-accent, #0d0f18); }
+
+/* ---------- вход ---------- */
+
+.gate {
+  max-width: 340px; margin: 8vh auto 0; text-align: center;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.gate-mark {
+  width: 54px; height: 54px; margin: 0 auto 2px; display: grid; place-items: center;
+  border-radius: 14px; background: var(--accent-dim); border: 1px solid var(--accent-line);
+}
+.gate-mark svg { width: 26px; height: 26px; color: var(--accent); }
+.gate h2 { font-size: 17px; font-weight: 600; }
+.gate .dim { font-size: 12.5px; line-height: 1.5; margin-bottom: 4px; }
+.gate .f { text-align: left; }
+.gate-acts { display: flex; gap: 8px; margin-top: 2px; }
+
+/* ник, под которым сидим: он же кнопка выхода */
+.f-me {
+  display: flex; align-items: center; gap: 7px; padding: 0 10px; height: 28px;
+  margin-right: 8px; -webkit-app-region: no-drag; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px;
+  color: var(--dim); font-size: 12px;
+}
+.f-me svg { width: 13px; height: 13px; }
+.f-me:hover { color: var(--text); border-color: var(--line-2); }
+
+.friends-empty {
+  padding: 22px 12px; text-align: center; font-size: 12.5px; color: var(--dim);
+  border: 1px dashed var(--line-2); border-radius: var(--r-sm);
+}

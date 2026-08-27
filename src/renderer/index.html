@@ -76,6 +76,7 @@
     <button class="rail-item" data-page="account"><svg><use href="#i-user"/></svg><span>Аккаунт</span></button>
     <button class="rail-item" data-page="settings"><svg><use href="#i-sliders"/></svg><span>Настройки</span></button>
     <button class="rail-item" data-page="console"><svg><use href="#i-terminal"/></svg><span>Консоль</span></button>
+    <button class="rail-item" id="open-friends"><svg><use href="#i-user"/></svg><span>Друзья</span></button>
     <button class="rail-item" id="open-agent"><svg><use href="#i-spark"/></svg><span>Помощник</span></button>
 
     <div class="rail-foot">
@@ -102,6 +103,32 @@
         <h3>Сборок пока нет</h3>
         <p class="dim">Соберите любую версию — от alpha 2010 года до свежих снапшотов.</p>
         <button class="btn accent" id="go-create-2">Создать первую</button>
+      </div>
+
+      <h2 class="sec">Игра с другом</h2>
+      <div class="panel">
+        <div class="side-head">
+          <span class="lbl">Общий доступ к миру</span>
+          <span class="count mono" id="share-status">выключено</span>
+        </div>
+        <p class="dim">Без модов и без Radmin. Лаунчер держит постоянный порт и сам переключает его на ваш мир — порт у мира каждый раз новый, а адрес для друга остаётся один и тот же.</p>
+
+        <div class="form-row">
+          <label class="f"><span class="lbl">Постоянный порт</span><input id="share-port" class="mono" type="number" min="1024" max="65535" value="25565" /></label>
+          <button class="btn accent" id="share-on">Включить</button>
+          <button class="btn" id="share-off" hidden>Выключить</button>
+        </div>
+        <p class="note" id="share-note" hidden></p>
+
+        <div class="divider"></div>
+        <div class="side-head"><span class="lbl">Как играть вдвоём</span></div>
+        <ol class="steps-min">
+          <li>Включите доступ кнопкой выше.</li>
+          <li>В окне <b class="lnk" id="share-friends">Друзья</b> заведите ник и нажмите «Открыть мир».</li>
+          <li>Запустите игру, войдите в мир и нажмите <b>Esc → Открыть для сети → Открыть мир</b>.</li>
+          <li>Друг вписывает ваш <b>ник</b> у себя в окне «Друзья» — ваш мир появляется у него в списке серверов внутри игры.</li>
+        </ol>
+        <p class="dim">Ник закрепляется за вами навсегда: адрес диктовать не нужно, и он не протухает после перезапуска игры.</p>
       </div>
     </section>
 
@@ -187,6 +214,7 @@
       </div>
 
       <p class="note ok" id="modpack-hint" hidden>Модпак ставится в новую сборку: лаунчер сам поставит нужную версию игры, загрузчик, все моды и настройки автора. Существующие сборки не изменятся.</p>
+      <p class="note" id="shader-hint" hidden></p>
 
       <div class="split">
         <div class="rows" id="mods-list"></div>
