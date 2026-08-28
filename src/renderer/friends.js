@@ -215,6 +215,7 @@ $('#f-nick').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#f-a
 // ---------------- свой мир ----------------
 
 let serverOn = false;
+let task = null;                      // номер текущей долгой работы: по нему ловим её шаги
 
 function paintStatus(tn) {
   const box = $('#f-share-status');
@@ -273,6 +274,12 @@ async function loadWorlds() {
 
 $('#f-eula-link').addEventListener('click', () => app.shell.open('https://www.minecraft.net/eula'));
 
+// Выключатель на случай «сейчас не хочу никого»: снятая галочка обрывает
+// входящие в перенаправителе, не трогая ни сервер, ни список друзей.
+$('#f-incoming').addEventListener('change', (e) => {
+  app.config.set({ friendsIncoming: e.target.checked }).catch(() => {});
+});
+
 $('#f-tunnel-on').addEventListener('click', async () => {
   const note = $('#f-share-note');
   note.hidden = true;
@@ -282,13 +289,28 @@ $('#f-tunnel-on').addEventListener('click', async () => {
 
   serverOn = true;
   paintStatus(lastTunnel);
-  say(note, T('Поднимаю сервер — первый раз это дольше, качается серверный файл.'), '');
+  // Первый запуск сборки долгий: качается серверная часть, у Forge ещё и
+  // ставится установщиком. Молчать всё это время нельзя — человек решит,
+  // что зависло, и закроет лаунчер на середине.
+  task = `t${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
+  say(note, T('Готовлю сервер…'), '');
   try {
-    await call(app.server.start({ world, eula: true }), note);
+    await call(app.server.start({ taskId: task, world, eula: true }), note);
   } catch {
     serverOn = false;
     paintStatus(lastTunnel);
+  } finally {
+    task = null;
   }
+});
+
+app.on('progress', (p) => {
+  if (!task || p.taskId !== task) return;
+  const note = $('#f-share-note');
+  note.hidden = false;
+  note.className = 'note';
+  const pc = Number.isFinite(p.percent) ? ` · ${Math.round(p.percent)}%` : '';
+  note.textContent = `${p.stage || 'Работаю'}${pc}${p.detail ? ` — ${p.detail}` : ''}`;
 });
 
 $('#f-tunnel-off').addEventListener('click', async () => {
@@ -303,6 +325,13 @@ app.on('tunnel:state', paintTunnel);
 app.on('server:state', (st) => { serverOn = Boolean(st?.running); paintStatus(lastTunnel); });
 
 (async function init() {
+  // оформление у окон общее: цвета боот уже поставил, картинку берём отдельно
+  const cfgUi = await app.config.get().then((r) => (r.ok ? r.data.ui : null)).catch(() => null);
+  if (cfgUi) window.theme.applyUi(cfgUi);
+  if (cfgUi?.background) {
+    app.ui.background().then((r) => { if (r?.ok && r.data) window.theme.applyBackground(r.data); }).catch(() => {});
+  }
+
   const acc = await app.tunnel.account().then((r) => (r.ok ? r.data : null)).catch(() => null);
   showMenu(acc?.saved ? acc.nick : null);
   if (acc?.nick && !acc.saved) {
@@ -313,6 +342,7 @@ app.on('server:state', (st) => { serverOn = Boolean(st?.running); paintStatus(la
 
   const cfg = await app.config.get().then((r) => (r.ok ? r.data : {})).catch(() => ({}));
   $('#f-eula').checked = cfg.eulaAccepted === true;
+  $('#f-incoming').checked = cfg.friendsIncoming !== false;
 
   const srv = await app.server.state().then((r) => (r.ok ? r.data : null)).catch(() => null);
   serverOn = Boolean(srv?.running);

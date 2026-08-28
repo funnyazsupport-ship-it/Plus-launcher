@@ -33,6 +33,18 @@ const friendsLib = require('./lib/friends');
 const mirrors = require('./lib/mirrors');
 const connectivity = require('./lib/connectivity');
 const appConfig = require('./lib/app-config');
+
+/*
+ * Своя иконка окна.
+ *
+ * Без неё Electron показывает в панели задач собственный значок — при запуске
+ * из исходников это видно сразу.
+ *
+ * Картинка лежит рядом с кодом, а не в build: в собранный пакет попадает
+ * только src, и значок из build там просто не нашёлся бы — ровно та же
+ * причина, что и у значка в трее ниже.
+ */
+const APP_ICON = path.join(__dirname, 'icon.png');
 const { launch } = require('./lib/launch');
 
 let win = null;
@@ -107,6 +119,7 @@ function createWindow() {
     minHeight: 620,
     frame: false,
     backgroundColor: '#0d0f18',
+    icon: APP_ICON,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -233,7 +246,26 @@ if (!app.requestSingleInstanceLock()) {
     });
   });
 }
-app.on('before-quit', () => { quitting = true; discord.disable(); stats.stop(); });
+let serverStopping = false;          // чтобы повторный выход не зациклился
+
+app.on('before-quit', (e) => {
+  quitting = true;
+  discord.disable();
+  stats.stop();
+  tunnel.stop();
+
+  /*
+   * Сервер мира — отдельный процесс java, и сам он не умрёт.
+   * Оставить его — значит держать мир занятым: в следующий раз он не
+   * откроется, а игра не пустит в тот же мир. Уходим только после того,
+   * как он сохранился и вышел.
+   */
+  if (mcserver.state().running && !serverStopping) {
+    e.preventDefault();
+    serverStopping = true;
+    mcserver.stop().finally(() => app.quit());
+  }
+});
 // Окно спрятано в трей — это не повод закрывать программу: выход только через
 // меню значка, иначе лаунчер исчезал бы сразу после нажатия на крестик.
 app.on('window-all-closed', () => {
@@ -252,6 +284,9 @@ let agentWin = null;
 function broadcast(channel, payload) {
   send(channel, payload);
   if (agentWin && !agentWin.isDestroyed()) agentWin.webContents.send(channel, payload);
+  // окно друзей поднимает сервер и должно показывать, что там происходит:
+  // без этого человек видит «поднимаю сервер» и не знает, сколько ждать
+  if (friendsWin && !friendsWin.isDestroyed()) friendsWin.webContents.send(channel, payload);
 }
 const progress = (taskId) => (p) => broadcast('progress', { taskId, ...p });
 
@@ -305,6 +340,47 @@ function publicConfig() {
     hasOwnCurseforgeKey: config.hasOwnCurseforgeKey(),
   };
 }
+
+// ---------- фон окна ----------
+
+/*
+ * Картинка лежит отдельным файлом, а не в config.json: настройки читаются
+ * при каждом чихе, и таскать в них мегабайт base64 было бы расточительно.
+ * Хранится сразу в виде data:URL — иначе её не показать: окна грузятся
+ * с file://, и правила безопасности страницы чужие пути не пропускают.
+ */
+const bgFile = () => path.join(dirs.root, 'ui-background.txt');
+const BG_MAX = 12 * 1024 * 1024;      // столько мы согласны держать в памяти окна
+
+handle('ui:background', async () => {
+  try { return await fsp.readFile(bgFile(), 'utf8'); } catch { return ''; }
+});
+
+handle('ui:pickBackground', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Картинка для фона',
+    properties: ['openFile'],
+    filters: [{ name: 'Изображения', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+  });
+  if (r.canceled || !r.filePaths[0]) return null;
+
+  const file = r.filePaths[0];
+  const { size } = await fsp.stat(file);
+  if (size > BG_MAX) throw new Error(`Картинка больше ${Math.round(BG_MAX / 1048576)} МБ — возьмите поменьше`);
+
+  const ext = path.extname(file).slice(1).toLowerCase();
+  const mime = ext === 'jpg' ? 'jpeg' : ext;
+  const url = `data:image/${mime};base64,${(await fsp.readFile(file)).toString('base64')}`;
+  await fsp.writeFile(bgFile(), url);
+  config.save({ ui: { ...config.load().ui, background: 'custom' } });
+  return url;
+});
+
+handle('ui:clearBackground', async () => {
+  try { await fsp.unlink(bgFile()); } catch { /* уже нет */ }
+  config.save({ ui: { ...config.load().ui, background: '' } });
+  return true;
+});
 
 handle('config:get', () => publicConfig());
 handle('config:set', (patch) => {
@@ -871,6 +947,23 @@ async function explainLastCrash(exitCode) {
 }
 
 handle('ai:available', () => ai.available());
+
+// ---------- какой нейросетью пользуемся ----------
+
+handle('ai:providers', () => ({
+  list: ai.providers(),
+  current: ai.current(),
+  ownKey: Boolean(config.aiKey()),
+}));
+
+handle('ai:models', ({ provider, key } = {}) => ai.models(provider, key));
+
+handle('ai:setProvider', ({ provider, model, key }) => {
+  // ключ приходит открытым текстом только сюда и тут же шифруется
+  if (key !== undefined) config.setAiKey(key);
+  config.save({ aiProvider: provider || '', aiModel: model || '' });
+  return { ...ai.current(), ownKey: Boolean(config.aiKey()) };
+});
 // Инструменты помощнику даём, только если это разрешено в настройках.
 // Renderer сюда не решает: флаг читается из конфига здесь.
 // noTools приходит из окна помощника и умеет только отнимать право на действия,
@@ -953,7 +1046,7 @@ handle('friends:open', () => {
   if (friendsWin && !friendsWin.isDestroyed()) { friendsWin.focus(); return true; }
   friendsWin = new BrowserWindow({
     width: 620, height: 700, minWidth: 480, minHeight: 480,
-    frame: false, backgroundColor: '#0d0f18', title: 'Друзья — Plus Launcher',
+    frame: false, backgroundColor: '#0d0f18', icon: APP_ICON, title: 'Друзья — Plus Launcher',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   friendsWin.loadFile(path.join(__dirname, '..', 'renderer', 'friends.html'));
@@ -1104,6 +1197,12 @@ handle('server:start', async ({ taskId, instanceId, world, eula }) => {
   const inst = cfg.instances.find((i) => i.id === (instanceId || cfg.lastInstance)) || cfg.instances[0];
   if (!inst) throw new Error('Сначала создайте сборку');
   if (!cfg.relayNick || !cfg.relayPass) throw new Error('Сначала войдите под своим ником');
+  /*
+   * Игра и сервер не могут держать один мир одновременно: оба пишут в те же
+   * файлы сохранения, и это кончается испорченным миром. Заходить надо уже
+   * на поднятый сервер — кнопкой «Играть» рядом.
+   */
+  if (gameProcess) throw new Error('Сначала закройте игру — иначе мир будет открыт дважды и может испортиться');
   if (eula) config.save({ eulaAccepted: true });
 
   const p = progress(taskId);
@@ -1151,6 +1250,7 @@ handle('ai:openAgent', () => {
     minHeight: 420,
     frame: false,
     backgroundColor: '#0d0e11',
+    icon: APP_ICON,
     title: 'Помощник — Plus Launcher',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -1221,24 +1321,32 @@ async function launchGame({ taskId, instanceId, join }) {
       if (gameLog.length > LOG_LINES) gameLog.splice(0, gameLog.length - LOG_LINES);
       send('game:log', line);
 
-      // Мир открыли «для сети» — игра назвала порт. Он каждый раз новый,
-      // поэтому перенаправитель переключаем на него на лету.
+      /*
+       * Мир открыли «для сети» прямо в игре. Это запасной путь: он работает,
+       * только если своего сервера сейчас нет. Иначе человек, нажавший Esc по
+       * привычке, увёл бы друзей с сервера в мир, который их не пустит —
+       * встроенный сервер игры проверяет сессию.
+       */
       const lan = share.lanPortFrom(line);
-      if (lan) {
+      if (lan && !mcserver.state().running) {
         share.setTarget(lan);
         send('share:state', share.state());
-        // мир открыли — только теперь друзьям есть куда заходить
         tunnel.setWorld(true);
         send('tunnel:state', tunnel.state());
       }
     } else if (type === 'progress') p(payload);
     else if (type === 'exit') {
       gameProcess = null;
-      // мир закрылся вместе с игрой — перенаправителю больше некуда слать
-      share.setTarget(null);
-      send('share:state', share.state());
-      tunnel.setWorld(false);
-      send('tunnel:state', tunnel.state());
+      /*
+       * Свой сервер живёт отдельно от игры: хозяин может выйти, а друзья
+       * остаться в мире. Закрываем доступ только если мир держала сама игра.
+       */
+      if (!mcserver.state().running) {
+        share.setTarget(null);
+        send('share:state', share.state());
+        tunnel.setWorld(false);
+        send('tunnel:state', tunnel.state());
+      }
       send('game:exit', payload);
       presence.playing = false;
       presence.gameSince = null;

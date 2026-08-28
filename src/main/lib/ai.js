@@ -4,13 +4,100 @@ const fsp = require('fs/promises');
 const path = require('path');
 const os = require('os');
 const rules = require('./crash-rules');
+const config = require('./config');
 
 let embeddedKey = () => '';
 try { embeddedKey = require('./embedded-key'); } catch { /* сборка без вшитых ключей */ }
 
-const API = 'https://api.deepseek.com/chat/completions';
-const MODEL = 'deepseek-chat';
+/*
+ * Сервисы помощника.
+ *
+ * Все они говорят на одном языке — формате OpenAI, — поэтому смена сводится к
+ * адресу и названию модели. Список моделей не зашит: он спрашивается у самого
+ * сервиса по /models, иначе каждая новая модель требовала бы обновления
+ * лаунчера. Ключ у каждого свой, вшитый в сборку или заданный в настройках.
+ */
+const PROVIDERS = {
+  deepseek: {
+    name: 'DeepSeek',
+    base: 'https://api.deepseek.com',
+    key: 'deepseek',
+    model: 'deepseek-chat',
+    signup: 'https://platform.deepseek.com/api_keys',
+  },
+  nvidia: {
+    name: 'NVIDIA',
+    base: 'https://integrate.api.nvidia.com/v1',
+    key: 'nvidia',
+    model: 'deepseek-ai/deepseek-r1',
+    signup: 'https://build.nvidia.com',
+  },
+  groq: {
+    name: 'Groq',
+    base: 'https://api.groq.com/openai/v1',
+    key: 'groq',
+    model: 'llama-3.3-70b-versatile',
+    signup: 'https://console.groq.com/keys',
+  },
+  gemini: {
+    name: 'Google Gemini',
+    base: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    key: 'gemini',
+    model: 'gemini-2.5-flash',
+    signup: 'https://aistudio.google.com/apikey',
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    base: 'https://openrouter.ai/api/v1',
+    key: 'openrouter',
+    model: 'deepseek/deepseek-chat',
+    signup: 'https://openrouter.ai/keys',
+  },
+};
+
+const DEFAULT_PROVIDER = 'deepseek';
 const TIMEOUT_MS = 60000;
+
+/** Какой сервис, модель и ключ используются прямо сейчас */
+function current() {
+  const cfg = config.load();
+  const id = PROVIDERS[cfg.aiProvider] ? cfg.aiProvider : DEFAULT_PROVIDER;
+  const provider = PROVIDERS[id];
+  return {
+    id,
+    provider,
+    // модель из настроек, иначе привычная для этого сервиса
+    model: cfg.aiModel || provider.model,
+    // свой ключ важнее вшитого: человек мог завести его как раз потому,
+    // что вшитый исчерпан или сервис ему не нравится
+    key: config.aiKey() || embeddedKey(provider.key) || '',
+  };
+}
+
+/** Список моделей у сервиса. Не зашит — иначе новые требовали бы обновления. */
+async function models(id = null, keyOverride = '') {
+  const cur = current();
+  const provider = PROVIDERS[id] || cur.provider;
+  const key = keyOverride || (id && id !== cur.id ? embeddedKey(provider.key) : cur.key);
+  if (!key) throw new Error(`Не задан ключ ${provider.name}`);
+
+  const res = await fetch(`${provider.base}/models`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error(`${provider.name}: ключ не принят`);
+    throw new Error(`${provider.name} ответил ошибкой ${res.status}`);
+  }
+  const list = (await res.json()).data || [];
+  return list.map((m) => m.id).filter(Boolean).sort();
+}
+
+/** Сервисы для окна настроек: без ключей, только имена и куда идти за ключом */
+const providers = () => Object.entries(PROVIDERS).map(([id, p]) => ({
+  id, name: p.name, model: p.model, signup: p.signup,
+  // у вшитого ключа сервис работает сразу, остальным нужен свой
+  builtin: Boolean(embeddedKey(p.key)),
+}));
 const MAX_LOG = 14000;          // столько символов лога отправляем максимум
 
 /**
@@ -174,10 +261,15 @@ function cancel() {
 
 /** Один запрос к сервису. Возвращает сообщение целиком — в нём может быть запрос инструмента. */
 async function askRaw(messages, { temperature = 0.3, maxTokens = 900, what = 'Сервис', tools = null } = {}) {
-  const key = embeddedKey('deepseek');
-  if (!key) throw new Error(`${what} недоступен: в сборке нет ключа`);
+  const { provider, model, key, id } = current();
+  if (!key) {
+    throw new Error(id === DEFAULT_PROVIDER
+      ? `${what} недоступен: в сборке нет ключа`
+      : `${what}: не задан ключ ${provider.name} — впишите его в настройках`);
+  }
 
-  const body = { model: MODEL, temperature, max_tokens: maxTokens, messages };
+  const API = `${provider.base}/chat/completions`;
+  const body = { model, temperature, max_tokens: maxTokens, messages };
   if (tools) body.tools = tools;
 
   const ac = new AbortController();
@@ -504,6 +596,10 @@ async function chat(messages, { context = '', allowActions = false } = {}) {
   return { text, toolCalls };
 }
 
-const available = () => Boolean(embeddedKey('deepseek'));
+/** Есть ли чем отвечать: вшитый ключ выбранного сервиса или свой из настроек */
+const available = () => Boolean(current().key);
 
-module.exports = { explainCrash, chat, available, cancel, anonymize, squeezeLog };
+module.exports = {
+  explainCrash, chat, available, cancel, anonymize, squeezeLog,
+  providers, models, current: () => { const c = current(); return { id: c.id, name: c.provider.name, model: c.model }; },
+};

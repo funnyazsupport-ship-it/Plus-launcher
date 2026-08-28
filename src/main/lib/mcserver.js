@@ -2,6 +2,7 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
+const net = require('net');
 const { spawn } = require('child_process');
 
 const { dirs, gameDir } = require('./paths');
@@ -39,6 +40,25 @@ const STOP_MS = 20000;                 // столько ждём, пока се
 
 /** Папка, куда складываем серверные jar-файлы */
 const jarDir = () => path.join(dirs.cache, 'server');
+
+/**
+ * Свободный порт, выбранный заранее.
+ *
+ * Можно было бы написать в настройках 0 и дать серверу выбрать самому, но тогда
+ * узнать номер получится только из его журнала — а формулировка строки у разных
+ * загрузчиков разная. Не разобрали строку — и друзья молча никуда не попадают.
+ * Выбирая порт сами, мы знаем его до запуска.
+ */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const s = net.createServer();
+    s.on('error', reject);
+    s.listen(0, '0.0.0.0', () => {
+      const { port } = s.address();
+      s.close(() => resolve(port));
+    });
+  });
+}
 
 /** Сервер запущен? Разбираем строку журнала */
 const isReady = (line) => READY.test(String(line || ''));
@@ -248,14 +268,15 @@ async function start(inst, world, opt = {}, onEvent = () => {}) {
   // Согласие спрашивает лаунчер, здесь только записываем ответ:
   // без файла сервер откажется стартовать и напишет об этом в консоль.
   await fsp.writeFile(path.join(dir, 'eula.txt'), 'eula=true\n');
+  const port = Number(opt.port) > 0 ? Number(opt.port) : await freePort();
   await fsp.writeFile(
     path.join(dir, 'server.properties'),
-    propertiesFor({ port: opt.port || 0, world: `saves/${world}`, motd: `${inst.name} — Plus Launcher` }),
+    propertiesFor({ port, world: `saves/${world}`, motd: `${inst.name} — Plus Launcher` }),
   );
 
   onEvent('progress', { stage: 'Запуск сервера', percent: 80 });
   ready = false;
-  boundPort = null;
+  boundPort = port;                  // знаем заранее, журнал только подтвердит
   proc = spawn(javaPath, args, { cwd: dir, windowsHide: true });
 
   const line = (chunk) => {

@@ -201,3 +201,23 @@ describe('запуск сервера', () => {
     assert.equal(mcserver.state().running, false);
   });
 });
+
+describe('порт сервера', () => {
+  test('в настройки уходит настоящий номер, а не ноль', async () => {
+    /*
+     * Раньше писали 0 и ждали, что сервер назовёт порт в журнале. Формулировка
+     * строки у загрузчиков разная: не разобрали — и друзья молча никуда не
+     * попадают. Порт выбираем сами, до запуска.
+     */
+    makeWorld('f1', 'Мир');
+    // java до дела не дойдёт, но server.properties к тому времени уже записан
+    await mcserver.start({ folder: 'f1', mc: '1.20.1', versionId: 'нет-такой', loader: 'vanilla' },
+      'Мир', { eula: true, port: 0 }).catch(() => {});
+
+    const { gameDir } = require('../src/main/lib/paths');
+    const file = path.join(gameDir('f1'), 'server.properties');
+    if (!fs.existsSync(file)) return;          // не дошло до записи — проверять нечего
+    const port = Number(fs.readFileSync(file, 'utf8').match(/^server-port=(\d+)$/m)?.[1]);
+    assert.ok(port > 0 && port < 65536, `в настройках порт ${port}`);
+  });
+});

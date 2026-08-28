@@ -23,10 +23,33 @@ const DEFAULTS = {
   showOld: true,
   // Ключ CurseForge API хранится зашифрованным в curseforgeKeyEnc — открытым текстом его тут нет
   curseforgeKeyEnc: '',
+  /*
+   * Помощник. Сервисы говорят на одном языке (формат OpenAI), поэтому смена
+   * сводится к адресу и названию модели. Свой ключ хранится зашифрованным.
+   * Пусто — берётся вшитый в сборку и сервис по умолчанию.
+   */
+  aiProvider: '',
+  aiModel: '',
+  aiKeyEnc: '',
   checkUpdatesOnStart: true,
   // Язык интерфейса (ru, en, uk) и тема оформления (dark, light, system)
   lang: 'ru',
   theme: 'dark',
+  /*
+   * Оформление под себя: цвет акцента, скругления, плотность, шрифт, фон.
+   * Всё это переменные CSS — правила вёрстки их не знают и не меняются.
+   * Значения по умолчанию и починку негодных делает renderer/theme.js.
+   */
+  ui: {
+    accent: '#74c045',
+    radius: 9,
+    density: 'normal',
+    font: 'system',
+    animations: true,
+    background: '',        // '' или 'custom' — картинка лежит отдельным файлом
+    bgDim: 55,
+    bgBlur: 0,
+  },
   // Копировать миры перед запуском игры и сколько копий каждого мира хранить
   backupBeforePlay: false,
   backupKeep: 5,
@@ -183,6 +206,10 @@ function setCurseforgeKey(value) {
 /** Свой ли ключ задан (не вшитый) */
 const hasOwnCurseforgeKey = () => Boolean(secret.decrypt(load().curseforgeKeyEnc));
 
+/** Свой ключ помощника из настроек. Пусто — сборка возьмёт вшитый. */
+const aiKey = () => secret.decrypt(load().aiKeyEnc) || '';
+const setAiKey = (value) => save({ aiKeyEnc: value ? secret.encrypt(value) : '' });
+
 /**
  * Переводит старые конфиги на шифрование: ключ мог лежать открытым текстом
  * (или зашифроваться до готовности системного хранилища).
@@ -210,5 +237,6 @@ function migrateSecrets() {
 
 module.exports = {
   load, save, DEFAULTS, curseforgeKey, setCurseforgeKey, hasOwnCurseforgeKey,
+  aiKey, setAiKey,
   migrateSecrets, dropMovedKeys, effectiveFor, overridesOf, PER_INSTANCE,
 };

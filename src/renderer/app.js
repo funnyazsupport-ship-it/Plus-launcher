@@ -134,6 +134,20 @@ $('#btn-close').addEventListener('click', () => app.win.close());
 
 // ---------------- сборки ----------------
 
+/*
+ * Цвет сборки и два его оттенка — прямо в элемент.
+ *
+ * Раньше оттенки считались через color-mix в самом CSS, и браузер пересчитывал
+ * их для каждой карточки при каждой перерисовке списка. На двух десятках сборок
+ * это заметно, а результат всё равно один и тот же.
+ */
+function paintCardColor(el, color) {
+  const rgb = window.theme.toRgb(color) || [116, 192, 69];
+  el.style.setProperty('--c', color);
+  el.style.setProperty('--c-dim', `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, .16)`);
+  el.style.setProperty('--c-line', `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, .45)`);
+}
+
 function renderInstances() {
   const box = $('#instances');
   box.innerHTML = '';
@@ -142,7 +156,7 @@ function renderInstances() {
   for (const inst of state.instances) {
     const el = document.createElement('div');
     el.className = `card${state.selected === inst.id ? ' on' : ''}`;
-    el.style.setProperty('--c', inst.color || COLORS[0]);
+    paintCardColor(el, inst.color || COLORS[0]);
     const own = OWN_KEYS.filter((k) => inst[k]);
     el.innerHTML = `
       <div class="card-acts">
@@ -393,57 +407,29 @@ $('#ic-bk-folder').addEventListener('click', () => { if (editing) app.backups.fo
 // ---------------- игра с другом ----------------
 
 /*
- * Мир, открытый «для сети», живёт на случайном порту, и туннель пришлось бы
- * перенастраивать после каждого запуска. Лаунчер держит постоянный порт и сам
- * переводит его на текущий мир — тогда адрес для друга задаётся один раз.
+ * Открывать мир нечем, кроме окна «Друзья»: всё делается там.
+ *
+ * Раньше здесь стояла настройка порта и кнопка «Включить», а мир открывали
+ * в самой игре через «Открыть для сети». От этого пришлось уйти: встроенный
+ * сервер игры проверяет сессию входящего, и друзья с пиратскими аккаунтами
+ * отлетали с «Invalid session». Теперь лаунчер поднимает настоящий сервер,
+ * а здесь остаётся только показать, открыт мир или нет.
  */
 function paintShare(st) {
-  const on = st?.running;
-  $('#share-on').hidden = on;
-  $('#share-off').hidden = !on;
-  $('#share-port').disabled = on;
-
   const box = $('#share-status');
-  if (!on) { box.textContent = 'выключено'; box.className = 'count mono'; return; }
-  box.className = 'count mono ok';
-  box.textContent = st.target ? `мир открыт · порт ${st.target}` : 'ждёт открытия мира';
-
-  const note = $('#share-note');
-  note.hidden = false;
-  if (!st.target) {
-    note.className = 'note';
-    note.textContent = 'Доступ включён. Осталось войти в мир и нажать Esc → «Открыть для сети».';
-  } else {
-    note.className = 'note ok';
-    note.textContent = `Мир открыт, друзья могут заходить${st.players ? `. Сейчас подключено: ${st.players}` : ''}.`;
-  }
+  const open = Boolean(st?.running && st.world);
+  box.className = open ? 'count mono ok' : 'count mono';
+  box.textContent = open ? 'друзья могут заходить' : 'закрыт';
 }
 
-$('#share-on').addEventListener('click', async () => {
-  const port = Number($('#share-port').value) || 25565;
-  try {
-    const st = await call(app.share.start(port), true);
-    paintShare(st);
-    toast('Доступ включён');
-  } catch (e) {
-    const note = $('#share-note');
-    note.hidden = false;
-    note.className = 'note err';
-    note.textContent = e.message;
-  }
-});
-
-$('#share-off').addEventListener('click', async () => {
-  await call(app.share.stop()).catch(() => {});
-  paintShare({ running: false });
-  toast('Доступ выключен');
-});
-
+$('#share-open').addEventListener('click', () => app.friends.open());
 $('#share-friends').addEventListener('click', () => app.friends.open());
 $('#open-friends').addEventListener('click', () => app.friends.open());
 
-// состояние меняет и главный процесс: мир открыли или игра закрылась
-app.on('share:state', paintShare);
+// состояние меняет главный процесс: сервер поднялся или игра закрылась
+app.on('tunnel:state', paintShare);
+// окно могли открыть, когда мир уже открыт — спрашиваем текущее состояние
+app.tunnel.state().then((r) => { if (r.ok) paintShare(r.data); }).catch(() => {});
 
 // ---------------- файл сборки .plusmodpack ----------------
 
@@ -592,7 +578,7 @@ const currentInstance = () => state.instances.find((i) => i.id === state.selecte
 function updateDock() {
   const inst = currentInstance();
   const dock = $('.dock-mark');
-  dock.style.setProperty('--c', inst?.color || COLORS[0]);
+  paintCardColor(dock, inst?.color || COLORS[0]);
 
   // в доке показываем ту же иконку, что и на карточке
   const pic = inst && state.icons[inst.id];
@@ -1657,6 +1643,7 @@ function bindSettings() {
   $('#s-stats').checked = cfg.shareStats !== false;
   $('#s-stats').addEventListener('change', (e) => save({ shareStats: e.target.checked }));
   $('#s-check-update').addEventListener('click', () => checkUpdate(false));
+  initAiProvider();
   app.update.version().then((r) => { if (r.ok) $('#app-version').textContent = `v${r.data}`; });
 
   initMirrors(cfg.mirrors || 'auto');
@@ -1698,6 +1685,13 @@ function applyTheme(mode) {
   document.documentElement.setAttribute('data-theme', real);
   // boot.js прочитает это при следующем запуске и покрасит окно ещё до отрисовки
   try { localStorage.setItem('theme', real); } catch { /* приватный режим */ }
+
+  /*
+   * Оформление зависит от темы: акцент подгоняется под фон, затемнение картинки
+   * на светлой теме белое, а не чёрное. Без пересчёта после смены темы окно
+   * оставалось бы с прежними значениями — на белом фоне это сразу видно.
+   */
+  if (window.theme && ui.accent) saveUi({}, { store: false });
 }
 
 function initLook(cfg) {
@@ -1733,6 +1727,208 @@ function initLook(cfg) {
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
     if ((state.cfg.theme || 'dark') === 'system') applyTheme('system');
   });
+
+  initUi(cfg);
+}
+
+// ---------------- какой нейросетью пользуемся ----------------
+
+async function initAiProvider() {
+  const note = $('#s-ai-note');
+  const sel = $('#s-ai-provider');
+  const modelSel = $('#s-ai-model');
+
+  const info = await app.ai.providers().then((r) => (r.ok ? r.data : null)).catch(() => null);
+  if (!info) return;
+
+  sel.innerHTML = '';
+  for (const p of info.list) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    // видно сразу, где ключ уже есть, а где придётся заводить свой
+    o.textContent = p.builtin ? `${p.name} — готово` : `${p.name} — нужен свой ключ`;
+    o.dataset.signup = p.signup;
+    o.dataset.model = p.model;
+    sel.appendChild(o);
+  }
+  sel.value = info.current.id;
+
+  /** Пока модели не загружены, показываем ту, что выбрана */
+  const showCurrent = (id) => {
+    modelSel.innerHTML = '';
+    const o = document.createElement('option');
+    const opt = sel.querySelector(`option[value="${id}"]`);
+    o.value = id === info.current.id ? info.current.model : opt.dataset.model;
+    o.textContent = o.value;
+    modelSel.appendChild(o);
+  };
+  showCurrent(info.current.id);
+
+  sel.addEventListener('change', () => { showCurrent(sel.value); note.hidden = true; });
+
+  $('#s-ai-signup').addEventListener('click', () => {
+    const opt = sel.querySelector(`option[value="${sel.value}"]`);
+    if (opt?.dataset.signup) app.shell.open(opt.dataset.signup);
+  });
+
+  $('#s-ai-load').addEventListener('click', async () => {
+    note.hidden = false;
+    note.className = 'note';
+    note.textContent = 'Спрашиваю список моделей…';
+    try {
+      const list = await call(app.ai.models({ provider: sel.value, key: $('#s-ai-key').value.trim() }));
+      const was = modelSel.value;
+      modelSel.innerHTML = '';
+      for (const id of list) {
+        const o = document.createElement('option');
+        o.value = id;
+        o.textContent = id;
+        modelSel.appendChild(o);
+      }
+      if (list.includes(was)) modelSel.value = was;
+      note.className = 'note ok';
+      note.textContent = `Моделей доступно: ${list.length}`;
+    } catch (e) {
+      note.className = 'note err';
+      note.textContent = e.message;
+    }
+  });
+
+  $('#s-ai-save').addEventListener('click', async () => {
+    note.hidden = false;
+    try {
+      const key = $('#s-ai-key').value.trim();
+      const r = await call(app.ai.setProvider({
+        provider: sel.value,
+        model: modelSel.value,
+        // пустое поле не стирает уже сохранённый ключ — иначе он терялся бы
+        // при каждом изменении модели
+        ...(key ? { key } : {}),
+      }));
+      $('#s-ai-key').value = '';
+      note.className = 'note ok';
+      note.textContent = `Помощник теперь отвечает через ${r.name}, модель ${r.model}.`;
+    } catch (e) {
+      note.className = 'note err';
+      note.textContent = e.message;
+    }
+  });
+}
+
+// ---------------- оформление под себя ----------------
+
+let ui = {};
+
+/** Применяет оформление и запоминает его для следующего запуска */
+async function saveUi(patch = {}, { store = true } = {}) {
+  ui = window.theme.normalize({ ...ui, ...patch });
+  window.theme.applyUi(ui);
+  // boot.js прочитает это до первой отрисовки — иначе окно мигает зелёным
+  try {
+    localStorage.setItem('ui-vars', JSON.stringify(window.theme.varsFrom(ui)));
+    localStorage.setItem('ui-anim', ui.animations ? 'on' : 'off');
+  } catch { /* приватный режим */ }
+  if (store) state.cfg = await call(app.config.set({ ui }));
+}
+
+function initUi(cfg) {
+  ui = window.theme.normalize(cfg.ui || {});
+
+  // готовые цвета
+  const box = $('#s-accents');
+  box.innerHTML = '';
+  for (const p of window.theme.PRESETS) {
+    const b = document.createElement('button');
+    b.className = 'swatch';
+    b.style.background = p.color;
+    b.title = p.name;
+    b.addEventListener('click', () => { $('#s-accent').value = p.color; saveUi({ accent: p.color }); paintUi(); });
+    box.appendChild(b);
+  }
+
+  // шрифты
+  const font = $('#s-font');
+  font.innerHTML = '';
+  for (const [id, f] of Object.entries(window.theme.FONTS)) {
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = f.name;
+    font.appendChild(o);
+  }
+
+  const paintUi = () => {
+    $('#s-accent').value = ui.accent;
+    $('#s-radius').value = ui.radius;
+    $('#s-radius-v').textContent = ui.radius;
+    $('#s-font').value = ui.font;
+    $('#s-anim').checked = ui.animations;
+    $('#s-bgdim').value = ui.bgDim;
+    $('#s-bgdim-v').textContent = ui.bgDim;
+    $('#s-bgblur').value = ui.bgBlur;
+    $('#s-bgblur-v').textContent = ui.bgBlur;
+    $('#s-density').querySelectorAll('button')
+      .forEach((b) => b.classList.toggle('on', b.dataset.density === ui.density));
+    $('#s-bg-tune').hidden = !ui.background;
+    $('#s-accents').querySelectorAll('.swatch').forEach((b, i) => b.classList
+      .toggle('on', window.theme.PRESETS[i].color.toLowerCase() === String(ui.accent).toLowerCase()));
+  };
+
+  // Цвет и ползунки меняются подряд по многу раз, пока человек тянет мышь.
+  // Показываем сразу, а в файл настроек пишем, когда он отпустит.
+  const live = (sel, key, label) => {
+    const el = $(sel);
+    el.addEventListener('input', () => {
+      if (label) $(label).textContent = el.value;
+      saveUi({ [key]: el.value }, { store: false });
+    });
+    el.addEventListener('change', () => saveUi({ [key]: el.value }));
+  };
+
+  live('#s-accent', 'accent');
+  live('#s-radius', 'radius', '#s-radius-v');
+  live('#s-bgdim', 'bgDim', '#s-bgdim-v');
+  live('#s-bgblur', 'bgBlur', '#s-bgblur-v');
+
+  $('#s-font').addEventListener('change', (e) => saveUi({ font: e.target.value }));
+  $('#s-anim').addEventListener('change', (e) => saveUi({ animations: e.target.checked }));
+  $('#s-density').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    saveUi({ density: b.dataset.density }).then(paintUi);
+  }));
+
+  $('#s-ui-reset').addEventListener('click', async () => {
+    await saveUi({ ...window.theme.DEFAULTS, background: ui.background });
+    paintUi();
+    toast('Оформление сброшено');
+  });
+
+  // фон
+  const note = $('#s-bg-note');
+  $('#s-bg-pick').addEventListener('click', async () => {
+    note.hidden = true;
+    try {
+      const url = await call(app.ui.pickBackground());
+      if (!url) return;
+      window.theme.applyBackground(url);
+      await saveUi({ background: 'custom' });
+      paintUi();
+    } catch (e) {
+      note.hidden = false;
+      note.className = 'note err';
+      note.textContent = e.message;
+    }
+  });
+  $('#s-bg-clear').addEventListener('click', async () => {
+    await call(app.ui.clearBackground()).catch(() => {});
+    window.theme.applyBackground('');
+    await saveUi({ background: '' });
+    paintUi();
+  });
+
+  window.theme.applyUi(ui);
+  paintUi();
+  if (ui.background) {
+    app.ui.background().then((r) => { if (r?.ok && r.data) window.theme.applyBackground(r.data); }).catch(() => {});
+  }
 }
 
 // ---------------- уборка места ----------------

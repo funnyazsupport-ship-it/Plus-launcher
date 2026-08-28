@@ -13,9 +13,9 @@
 
 <svg class="sprite" aria-hidden="true"><defs>
   <symbol id="i-logo" viewBox="0 0 48 48">
-    <path d="M24 4 44 15 24 26 4 15Z" fill="#8fd45a"/>
-    <path d="M4 15 24 26v18L4 33Z" fill="#5da336"/>
-    <path d="M44 15 24 26v18l20-11Z" fill="#3f7526"/>
+    <path d="M24 4 44 15 24 26 4 15Z" fill="var(--accent-hi)"/>
+    <path d="M4 15 24 26v18L4 33Z" fill="var(--accent)"/>
+    <path d="M44 15 24 26v18l20-11Z" fill="var(--accent-2)"/>
   </symbol>
   <symbol id="i-min" viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.2"/></symbol>
   <symbol id="i-max" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
@@ -80,6 +80,7 @@
       <button class="btn" id="f-tunnel-off" hidden>Закрыть</button>
     </div>
     <label class="check" id="f-eula-row"><input type="checkbox" id="f-eula" /><span>Я принимаю <b class="lnk" id="f-eula-link">правила Minecraft (EULA)</b></span></label>
+    <label class="check"><input type="checkbox" id="f-incoming" /><span>Пускать друзей в мой мир</span></label>
     <p class="note" id="f-share-note" hidden></p>
     <p class="dim">Лаунчер поднимет настоящий сервер с вашим миром — заходить смогут любые аккаунты, моды не нужны ни вам, ни другу. Открывать мир в игре через Esc больше не надо.</p>
   </div>
@@ -104,6 +105,7 @@
 </main>
 
 <script src="i18n.js"></script>
+<script src="theme.js"></script>
 <script src="friends.js"></script>
 </body>
 </html>

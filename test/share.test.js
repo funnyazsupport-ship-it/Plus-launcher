@@ -94,6 +94,33 @@ describe('перенаправитель до игры', () => {
     second.srv.close();
   });
 
+  test('слушает только свою машину', async () => {
+    /*
+     * Труба до сервера друзей подключается через 127.0.0.1. Слушать все сетевые
+     * платы значило бы пустить в мир всю местную сеть мимо выключателя
+     * «пускать друзей» — а он проверяется именно здесь.
+     */
+    const game = await fakeGame();
+    const st = await share.start(0);
+    share.setTarget(game.port);
+
+    const outside = Object.values(require('os').networkInterfaces()).flat()
+      .find((i) => i.family === 'IPv4' && !i.internal);
+    if (!outside) return;                     // одна петля — снаружи и так не достучаться
+
+    await assert.rejects(
+      () => new Promise((res, rej) => {
+        const c = net.connect(st.port, outside.address);
+        c.on('connect', () => { c.destroy(); res(); });
+        c.on('error', rej);
+        setTimeout(() => { c.destroy(); rej(new Error('не достучались')); }, 2000);
+      }),
+      /ECONNREFUSED|не достучались|ETIMEDOUT/,
+      'порт виден из местной сети',
+    );
+    game.srv.close();
+  });
+
   test('порт 0 — любой свободный, и он не спорит с занятым 25565', async () => {
     const game = await fakeGame();
     const busy = net.createServer();
@@ -115,7 +142,9 @@ describe('перенаправитель до игры', () => {
   test('занятый порт даёт понятную ошибку, а не молчание', async () => {
     const busy = net.createServer();
     const port = await freePort();
-    await new Promise((r) => busy.listen(port, '0.0.0.0', r));
+    // занимаем ту же петлю: перенаправитель слушает только её, и с чужой
+    // сетевой платой он бы не столкнулся
+    await new Promise((r) => busy.listen(port, '127.0.0.1', r));
 
     await assert.rejects(() => share.start(port), /уже занят/);
     busy.close();

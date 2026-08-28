@@ -12,17 +12,33 @@ const RESOURCES = 'https://resources.download.minecraft.net';
 const hostOf = (url) => { try { return new URL(url).host; } catch { return url; } };
 
 let manifestCache = null;
+let manifestAt = 0;
+
+/*
+ * Насколько список версий может «постареть» в памяти.
+ *
+ * Новые версии игры лаунчер подхватывает сам — код о них ничего не знает,
+ * всё приходит из манифеста Mojang. Но список читается один раз за запуск,
+ * и человеку с постоянно открытым лаунчером свежая версия не показывалась бы,
+ * пока он его не перезапустит. Полчаса — компромисс: не дёргаем Mojang на
+ * каждый чих и не заставляем перезапускаться.
+ */
+const MANIFEST_TTL = 30 * 60 * 1000;
 
 /** Полный список версий Mojang (release / snapshot / old_beta / old_alpha) */
 async function manifest(force = false) {
-  if (manifestCache && !force) return manifestCache;
+  if (manifestCache && !force && Date.now() - manifestAt < MANIFEST_TTL) return manifestCache;
   const cacheFile = path.join(dirs.cache, 'version_manifest_v2.json');
   try {
     manifestCache = await getJSON(MANIFEST);
+    manifestAt = Date.now();
     await fsp.writeFile(cacheFile, JSON.stringify(manifestCache));
   } catch (e) {
-    if (await exists(cacheFile)) manifestCache = JSON.parse(await fsp.readFile(cacheFile, 'utf8'));
-    else throw e;
+    if (await exists(cacheFile)) {
+      manifestCache = JSON.parse(await fsp.readFile(cacheFile, 'utf8'));
+      // список с диска старый: сеть появится — перечитаем, а не будем ждать полчаса
+      manifestAt = 0;
+    } else throw e;
   }
   return manifestCache;
 }

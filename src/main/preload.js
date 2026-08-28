@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld('api', {
     openPath: (p) => invoke('shell:openPath', p),
   },
   links: () => invoke('app:links'),
+  ui: {
+    background: () => invoke('ui:background'),
+    pickBackground: () => invoke('ui:pickBackground'),
+    clearBackground: () => invoke('ui:clearBackground'),
+  },
   config: {
     get: () => invoke('config:get'),
     set: (patch) => invoke('config:set', patch),
@@ -125,6 +130,9 @@ contextBridge.exposeInMainWorld('api', {
     chat: (opts) => invoke('ai:chat', opts),
     cancel: () => invoke('ai:cancel'),
     openAgent: () => invoke('ai:openAgent'),
+    providers: () => invoke('ai:providers'),
+    models: (opts) => invoke('ai:models', opts),
+    setProvider: (opts) => invoke('ai:setProvider', opts),
     // история переписок
     chats: () => invoke('chats:list'),
     chatRead: (id) => invoke('chats:read', id),
