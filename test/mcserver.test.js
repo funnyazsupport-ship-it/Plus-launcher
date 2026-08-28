@@ -202,6 +202,94 @@ describe('запуск сервера', () => {
   });
 });
 
+describe('почему сервер не поднялся', () => {
+  const say = (...lines) => mcserver.explain(lines);
+
+  test('графическая библиотека на сервере — та самая ошибка про lwjgl', () => {
+    // так падает Forge со включёнными шейдерами: понять по сообщению нельзя
+    assert.match(
+      say('java.lang.module.FindException: Module org.lwjgl not found, required by org.lwjgl.tinyexr'),
+      /картинки|шейдер/i,
+    );
+  });
+
+  test('мод только для клиента опознаётся — это самая частая причина', () => {
+    assert.match(
+      say('[main/ERROR]: Mod journeymap is client-side only and cannot run on a dedicated server'),
+      /только для клиента/,
+    );
+  });
+
+  test('не хватает Java', () => {
+    assert.match(say('java.lang.UnsupportedClassVersionError: class file version 65.0'), /Java/);
+  });
+
+  test('порт занят', () => {
+    assert.match(say('[Server thread/WARN]: **** FAILED TO BIND TO PORT!'), /[Пп]орт занят/);
+  });
+
+  test('не хватило памяти', () => {
+    assert.match(say('java.lang.OutOfMemoryError: Java heap space'), /памяти/);
+  });
+
+  test('незнакомая ошибка отдаётся последней строкой, а не проглатывается', () => {
+    const out = say('обычная строка', 'java.lang.NullPointerException: что-то своё', 'и ещё строка');
+    assert.match(out, /NullPointerException/);
+  });
+
+  test('журнал без ошибок не выдумывает причину', () => {
+    const out = say('[Server thread/INFO]: Preparing spawn area: 40%');
+    assert.match(out, /консоли лаунчера/);
+  });
+});
+
+describe('клиентские моды на время сервера', () => {
+  const { gameDir } = require('../src/main/lib/paths');
+  const modsDir = () => {
+    const d = path.join(gameDir('f1'), 'mods');
+    fs.mkdirSync(d, { recursive: true });
+    return d;
+  };
+  const put = (d, ...names) => names.forEach((n) => fs.writeFileSync(path.join(d, n), 'не настоящий'));
+  const list = (d) => fs.readdirSync(d).sort();
+
+  test('шейдеры и ускорители картинки убираются, остальное остаётся', () => {
+    const d = modsDir();
+    put(d, 'oculus-1.6.9.jar', 'embeddium-0.3.jar', 'jei-15.2.jar', 'create-0.5.1.jar');
+
+    const hidden = mcserver.hideClientMods(gameDir('f1'));
+    assert.deepEqual(hidden.sort(), ['embeddium-0.3.jar', 'oculus-1.6.9.jar']);
+    assert.deepEqual(list(d), ['create-0.5.1.jar', 'embeddium-0.3.jar.server-off', 'jei-15.2.jar', 'oculus-1.6.9.jar.server-off']);
+  });
+
+  test('после остановки всё возвращается на место', () => {
+    const d = modsDir();
+    put(d, 'oculus-1.6.9.jar', 'create-0.5.1.jar');
+    mcserver.hideClientMods(gameDir('f1'));
+
+    assert.equal(mcserver.restoreClientMods(gameDir('f1')), 1);
+    assert.deepEqual(list(d), ['create-0.5.1.jar', 'oculus-1.6.9.jar']);
+  });
+
+  test('моды с содержимым мира не трогаются — без них мир не откроется', () => {
+    const d = modsDir();
+    put(d, 'create-0.5.1.jar', 'valkyrien-skies-2.jar', 'lostcities-1.20.jar', 'parcool-1.20.jar');
+
+    assert.deepEqual(mcserver.hideClientMods(gameDir('f1')), []);
+    assert.equal(list(d).length, 4);
+  });
+
+  test('выключенные человеком моды не путаются с нашими', () => {
+    const d = modsDir();
+    put(d, 'oculus-1.6.9.jar.disabled', 'sodium-0.5.jar');
+    mcserver.hideClientMods(gameDir('f1'));
+
+    // .disabled — выбор человека, возвращать его в строй мы не вправе
+    mcserver.restoreClientMods(gameDir('f1'));
+    assert.deepEqual(list(d), ['oculus-1.6.9.jar.disabled', 'sodium-0.5.jar']);
+  });
+});
+
 describe('порт сервера', () => {
   test('в настройки уходит настоящий номер, а не ноль', async () => {
     /*

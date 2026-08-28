@@ -322,7 +322,31 @@ $('#f-tunnel-off').addEventListener('click', async () => {
 });
 
 app.on('tunnel:state', paintTunnel);
-app.on('server:state', (st) => { serverOn = Boolean(st?.running); paintStatus(lastTunnel); });
+app.on('server:state', (st) => {
+  serverOn = Boolean(st?.running);
+  paintStatus(lastTunnel);
+  // сервер закрылся, не успев подняться — говорим почему, а не молчим
+  if (!st?.failed) return;
+  task = null;
+  const note = $('#f-share-note');
+  const why = st.reason || T('Сервер не запустился');
+
+  if (st.text) {
+    // разбор помощника подробнее нашего: показываем его, свой оставляем сверху
+    note.hidden = false;
+    note.className = 'note err';
+    note.textContent = '';
+    const head = document.createElement('div');
+    head.textContent = why;
+    const body = document.createElement('div');
+    body.className = 'ai-answer';
+    body.textContent = st.text;
+    note.append(head, body);
+    return;
+  }
+
+  say(note, st.analyzing ? `${why}\n\n${T('Спрашиваю помощника…')}` : why, 'err');
+});
 
 (async function init() {
   // оформление у окон общее: цвета боот уже поставил, картинку берём отдельно

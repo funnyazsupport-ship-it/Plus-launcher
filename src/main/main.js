@@ -1160,6 +1160,29 @@ handle('tunnel:start', ({ instanceId } = {}) => startTunnel(instanceId));
 
 // ---------- свой сервер: игра с другом на любых аккаунтах ----------
 
+/**
+ * Просит помощника разобрать, почему не поднялся сервер.
+ *
+ * Свой разбор по шаблонам знает несколько частых случаев, но их всегда меньше,
+ * чем настоящих поломок. Помощник читает сам журнал и называет виноватый мод.
+ */
+async function explainServerFail(inst, payload) {
+  if (config.load().aiCrashHelp === false || !ai.available()) return;
+  send('server:state', { ...mcserver.state(), failed: true, reason: payload.reason, analyzing: true });
+  try {
+    const r = await ai.explainServer({
+      log: payload.log || '',
+      instance: inst,
+      mods: await enabledMods(inst.id),
+      guess: payload.reason || '',
+    });
+    send('server:state', { ...mcserver.state(), failed: true, reason: payload.reason, text: r });
+  } catch (e) {
+    // помощник недоступен — остаётся наш разбор по шаблонам, он уже показан
+    send('server:state', { ...mcserver.state(), failed: true, reason: payload.reason, aiError: e.message });
+  }
+}
+
 handle('server:state', () => mcserver.state());
 handle('server:worlds', async (instanceId) => {
   const cfg = config.load();
@@ -1228,7 +1251,10 @@ handle('server:start', async ({ taskId, instanceId, world, eula }) => {
       send('share:state', share.state());
       tunnel.setWorld(false);
       send('tunnel:state', tunnel.state());
-      send('server:state', mcserver.state());
+      // упавший на старте сервер выглядит как медленный: без причины
+      // окно висело бы на «запускаю» сколько угодно
+      send('server:state', { ...mcserver.state(), failed: payload.failed, reason: payload.reason });
+      if (payload.failed) explainServerFail(inst, payload);
     }
   });
 

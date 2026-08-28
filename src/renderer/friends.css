@@ -58,6 +58,12 @@ body.friends-win { display: flex; flex-direction: column; height: 100vh; overflo
 .friend.online .friend-mark { background: var(--accent); border-color: var(--accent); }
 .friend.online .friend-mark svg { color: var(--on-accent, #0d0f18); }
 
+/* разбор помощника: длиннее обычной подписи, поэтому отделяем и даём дышать */
+.ai-answer {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line);
+  color: var(--text); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap;
+}
+
 /* ---------- вход ---------- */
 
 .gate {

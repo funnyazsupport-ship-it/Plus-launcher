@@ -363,6 +363,35 @@ async function explainCrash({ log = '', gameDir = '', instance = {}, exitCode = 
   }
 }
 
+/**
+ * Разбор того, почему не поднялся сервер для игры с другом.
+ *
+ * Отдельно от разбора вылетов игры: причины тут свои. Чаще всего это мод,
+ * который работает только у клиента, — на сервере он валится ещё до запуска,
+ * и сообщение об этом ничего человеку не говорит.
+ */
+async function explainServer({ log = '', instance = {}, mods = [], guess = '' }) {
+  const facts = [
+    `Не запустился сервер для игры с другом.`,
+    `Сборка: Minecraft ${instance.mc || '?'}, загрузчик ${instance.loader || 'без модов'}.`,
+    mods.length ? `Модов включено: ${mods.length}. Список: ${mods.slice(0, 50).join(', ')}` : 'Моды не установлены.',
+    guess ? `Лаунчер предполагает: ${guess}` : '',
+    `\nВывод сервера:\n${squeezeLog(log)}`,
+  ].filter(Boolean);
+
+  const system = `${CRASH_SYSTEM}
+
+Речь о выделенном сервере Minecraft, а не об игре. Учитывай:
+— на сервере не работают моды для картинки: шейдеры (Oculus, Iris), ускорители отрисовки (Sodium, Embeddium, Rubidium), OptiFine, миникарты, зум. Они падают ещё до запуска;
+— сервер поднимает сам лаунчер в папке сборки, с online-mode=false, чтобы заходили любые аккаунты;
+— если виноват мод, назови его файл и скажи, что его надо убрать из сборки или сделать отдельную сборку для игры вместе.`;
+
+  return ask([
+    { role: 'system', content: system },
+    { role: 'user', content: facts.join('\n') },
+  ], { temperature: 0.2, maxTokens: 700, what: 'Разбор сервера' });
+}
+
 /*
  * Инструменты помощника. Читающие выполняются сразу, меняющие — только после
  * подтверждения человеком в окне помощника (спрашивает renderer, см. agent.js).
@@ -600,6 +629,6 @@ async function chat(messages, { context = '', allowActions = false } = {}) {
 const available = () => Boolean(current().key);
 
 module.exports = {
-  explainCrash, chat, available, cancel, anonymize, squeezeLog,
+  explainCrash, explainServer, chat, available, cancel, anonymize, squeezeLog,
   providers, models, current: () => { const c = current(); return { id: c.id, name: c.provider.name, model: c.model }; },
 };

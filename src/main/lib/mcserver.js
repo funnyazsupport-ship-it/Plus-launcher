@@ -235,9 +235,92 @@ async function serverArgs(inst, dir, opt, onProgress = () => {}) {
   return [ram, '-jar', await vanillaJar(inst, onProgress), 'nogui'];
 }
 
+/*
+ * Почему сервер не поднялся — человеческими словами.
+ *
+ * Голый кусок стека java ничего не объясняет, а причины у падения на старте
+ * почти всегда одни и те же. Что не узнали — отдаём последней осмысленной
+ * строкой журнала: она хотя бы указывает направление.
+ */
+const REASONS = [
+  [/Module org\.lwjgl|lwjgl.*not found|org\.lwjgl\.\w+ not found/i,
+    'Мод для картинки (шейдеры или ускоритель отрисовки) тянет графическую библиотеку, которой на сервере нет. Лаунчер убирает такие моды сам — если ошибка повторилась, уберите вручную Oculus, Iris, Embeddium, Sodium или OptiFine.'],
+  [/only.*client|client.*side.*only|ClientOnly|is client-side only/i,
+    'В сборке есть мод только для клиента — на сервере он падает. Уберите шейдеры, миникарты и подобное, либо создайте отдельную сборку для игры с другом.'],
+  [/Missing or unsupported mandatory dependencies|requires .* but|Mod .* requires/i,
+    'Какому-то моду не хватает зависимости. Посмотрите в консоли, какой мод и что просит.'],
+  [/java\.lang\.UnsupportedClassVersionError|has been compiled by a more recent/i,
+    'Нужна более новая Java. Сообщите — поправим версию для этой сборки.'],
+  [/OutOfMemoryError|Could not reserve enough space/i,
+    'Не хватило памяти серверу. Уменьшите число модов или дайте больше памяти.'],
+  [/failed to bind to port|Address already in use|BindException/i,
+    'Порт занят другой программой. Закройте второй лаунчер или свой сервер Minecraft.'],
+  [/You need to agree to the EULA/i,
+    'Не принято соглашение Minecraft — поставьте галочку и попробуйте снова.'],
+];
+
+function explain(tail) {
+  const text = tail.join('\n');
+  for (const [re, why] of REASONS) if (re.test(text)) return why;
+  // ничего знакомого — отдаём последнюю строку про ошибку, она ближе всего к причине
+  const hint = [...tail].reverse().find((s) => /error|exception|caused by/i.test(s));
+  return hint ? hint.slice(0, 200) : 'Сервер закрылся на запуске. Подробности в консоли лаунчера.';
+}
+
+/*
+ * Моды, которых на сервере быть не должно.
+ *
+ * Это средства отрисовки: шейдеры и ускорители картинки. Forge отсеивает те,
+ * что честно помечены клиентскими, но такие моды тащат за собой графические
+ * библиотеки (LWJGL), и сервер падает на них ещё до запуска — с сообщением
+ * «Module org.lwjgl not found», по которому догадаться невозможно.
+ *
+ * Список нарочно короткий и состоит только из того, что рисует картинку.
+ * Убрать мод с содержимым мира нельзя: без него мир не откроется.
+ */
+const CLIENT_ONLY = /^(oculus|iris|embeddium|rubidium|sodium|optifine|canvas|vulkanmod|nvidium|entityculling|immediatelyfast|betterfps)[-_.]/i;
+
+const OFF = '.server-off';            // приписка, чтобы отличить от выключенных человеком
+
+/** Прячет клиентские моды на время работы сервера. Возвращает, сколько убрал. */
+function hideClientMods(dir) {
+  const mods = path.join(dir, 'mods');
+  let files;
+  try { files = fs.readdirSync(mods); } catch { return []; }
+
+  const hidden = [];
+  for (const f of files) {
+    if (!/\.jar$/i.test(f) || !CLIENT_ONLY.test(f)) continue;
+    try {
+      fs.renameSync(path.join(mods, f), path.join(mods, f + OFF));
+      hidden.push(f);
+    } catch { /* занят игрой — оставим как есть, сервер сам пожалуется */ }
+  }
+  return hidden;
+}
+
+/** Возвращает спрятанные моды на место. Вызывается и перед запуском: если
+ *  лаунчер закрыли аварийно, они так и остались бы лежать выключенными. */
+function restoreClientMods(dir) {
+  const mods = path.join(dir, 'mods');
+  let files;
+  try { files = fs.readdirSync(mods); } catch { return 0; }
+
+  let back = 0;
+  for (const f of files) {
+    if (!f.endsWith(OFF)) continue;
+    try {
+      fs.renameSync(path.join(mods, f), path.join(mods, f.slice(0, -OFF.length)));
+      back += 1;
+    } catch { /* вернём при следующем запуске */ }
+  }
+  return back;
+}
+
 let proc = null;
 let ready = false;
 let boundPort = null;
+let serverDir = null;                 // куда возвращать моды после остановки
 
 const state = () => ({ running: Boolean(proc), ready, port: boundPort });
 
@@ -257,6 +340,9 @@ async function start(inst, world, opt = {}, onEvent = () => {}) {
     throw new Error(`Мир «${world}» не найден`);
   }
 
+  // моды могли остаться выключенными после аварийного закрытия лаунчера
+  restoreClientMods(dir);
+
   await fsp.mkdir(jarDir(), { recursive: true });
 
   onEvent('progress', { stage: 'Проверка Java', percent: 10 });
@@ -274,14 +360,30 @@ async function start(inst, world, opt = {}, onEvent = () => {}) {
     propertiesFor({ port, world: `saves/${world}`, motd: `${inst.name} — Plus Launcher` }),
   );
 
+  const hidden = hideClientMods(dir);
+  if (hidden.length) {
+    onEvent('log', `[launcher] на время сервера убраны клиентские моды: ${hidden.join(', ')}`);
+  }
+
   onEvent('progress', { stage: 'Запуск сервера', percent: 80 });
   ready = false;
   boundPort = port;                  // знаем заранее, журнал только подтвердит
+  serverDir = dir;
   proc = spawn(javaPath, args, { cwd: dir, windowsHide: true });
 
+  /*
+   * Держим хвост журнала.
+   *
+   * Сервер, упавший на старте, снаружи выглядит точно так же, как медленный:
+   * окно висит на «запускаю». Настоящая причина всегда в последних строках —
+   * чаще всего это мод, который не работает на серверной стороне.
+   */
+  const tail = [];
   const line = (chunk) => {
     for (const s of String(chunk).split(/\r?\n/)) {
       if (!s.trim()) continue;
+      tail.push(s);
+      if (tail.length > 40) tail.shift();
       onEvent('log', s);
       const p = portFrom(s);
       if (p) boundPort = p;
@@ -291,10 +393,17 @@ async function start(inst, world, opt = {}, onEvent = () => {}) {
   proc.stdout.on('data', line);
   proc.stderr.on('data', line);
   proc.on('exit', (code) => {
+    const never = !ready;              // не успел подняться — это падение, а не выход
     proc = null;
     ready = false;
     boundPort = null;
-    onEvent('exit', { code });
+    if (serverDir) { restoreClientMods(serverDir); serverDir = null; }
+    onEvent('exit', {
+      code,
+      failed: never,
+      reason: never ? explain(tail) : null,
+      log: tail.join('\n'),            // помощнику нужен сам журнал, а не пересказ
+    });
   });
 
   return state();
@@ -311,4 +420,7 @@ function stop() {
   });
 }
 
-module.exports = { start, stop, state, worlds, propertiesFor, isReady, portFrom, serverArgs };
+module.exports = {
+  start, stop, state, worlds, propertiesFor, isReady, portFrom, serverArgs, explain,
+  hideClientMods, restoreClientMods,
+};
