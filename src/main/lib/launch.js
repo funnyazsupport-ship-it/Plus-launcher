@@ -3,6 +3,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const { spawn } = require('child_process');
+const AdmZip = require('adm-zip');
 const { dirs, gameDir: gameDirFor } = require('./paths');
 const versions = require('./versions');
 const java = require('./java');
@@ -37,6 +38,39 @@ function flatten(args, features) {
 
 function subst(str, vars) {
   return String(str).replace(/\$\{([a-z_]+)\}/gi, (m, k) => (k in vars ? String(vars[k]) : m));
+}
+
+/*
+ * Java-агенты из папки сборки.
+ *
+ * Часть модов приезжает не одним файлом: рядом лежит агент, который правит
+ * классы игры на лету. Fabric такой файл модом не считает и молча пропускает
+ * («Found 1 non-fabric mod»), а сам он без -javaagent не подключается — мод
+ * падает на классе, который агент должен был подготовить.
+ *
+ * Агента опознаём не по имени, а по манифесту: у него есть Premain-Class.
+ * Обычный мод такой строки не содержит, так что ошибиться тут негде.
+ */
+function findAgents(gameDir) {
+  const out = [];
+  // agents — для тех, кто знает, что делает; mods — куда агент кладут по незнанию
+  for (const sub of ['agents', 'mods']) {
+    const dir = path.join(gameDir, sub);
+    let files;
+    try { files = fs.readdirSync(dir); } catch { continue; }
+
+    for (const f of files) {
+      if (!/\.jar$/i.test(f)) continue;
+      const full = path.join(dir, f);
+      try {
+        const entry = new AdmZip(full).getEntry('META-INF/MANIFEST.MF');
+        if (!entry) continue;
+        const manifest = entry.getData().toString('utf8');
+        if (/^Premain-Class:/mi.test(manifest)) out.push(full);
+      } catch { /* битый архив — не наше дело, мод сам о себе скажет */ }
+    }
+  }
+  return out;
 }
 
 /** Разбирает «куда заходить»: host или host:port. Порт по умолчанию — обычный игровой */
@@ -156,6 +190,12 @@ async function launch(opt, onEvent = () => {}) {
     jvm.push(...await require('./ely').jvmArgs((p) => onEvent('progress', p)));
   }
 
+  // Агенты из сборки — тоже до аргументов версии, по той же причине
+  for (const agent of findAgents(gameDir)) {
+    jvm.push(`-javaagent:${agent}`);
+    onEvent('log', `[launcher] подключён агент ${path.basename(agent)}\n`);
+  }
+
   if (v.arguments?.jvm) {
     jvm.push(...flatten(v.arguments.jvm, features).map((a) => subst(a, vars)));
   } else {
@@ -212,4 +252,4 @@ async function launch(opt, onEvent = () => {}) {
   return child;
 }
 
-module.exports = { launch, buildClasspath, parseJoin };
+module.exports = { launch, buildClasspath, parseJoin, findAgents };
