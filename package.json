@@ -51,10 +51,19 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "PlusLauncher-Setup-${version}.${ext}"
+      "artifactName": "PlusLauncher-Setup-${version}.${ext}",
+      "signtoolOptions": {
+        "publisherName": "Plus Launcher"
+      }
     },
     "nsis": {
       "oneClick": false,
