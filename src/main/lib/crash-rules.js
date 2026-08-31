@@ -147,6 +147,39 @@ const RULES = [
     ],
   },
   {
+    /*
+     * Настоящие версии класса — числа до сотни (52 это Java 8, 65 — Java 21).
+     * Тысячи означают, что класс зашифрован: его готовит java-агент,
+     * который лежит рядом с модом и подключается через -javaagent.
+     * Лаунчер подключает такие агенты сам, если файл лежит в mods или agents.
+     */
+    id: 'agent-missing',
+    test: /Unsupported class file major version (\d{3,})/i,
+    title: 'Моду нужен java-агент, а его нет рядом',
+    fix: [
+      'Проверьте, что вместе с модом в папку mods попал его файл-агент — обычно в имени есть «agent».',
+      'Лаунчер подключает такие файлы сам: перезапустите игру кнопкой «ИГРАТЬ».',
+      'Если агента в сборке нет, скачайте мод целиком заново — его выложили не полностью.',
+    ],
+    extract: (log) => {
+      const m = log.match(/Error loading class: ([\w/$.]+)/);
+      return m ? `не читается класс ${m[1].replace(/\//g, '.')}` : null;
+    },
+  },
+  {
+    id: 'mixin-version',
+    test: /@Shadow (?:field|method) \S+ was not located in the target class|was not located in the target class/i,
+    title: 'Мод собран под другую версию Minecraft',
+    fix: [
+      'Во вкладке «Моды» откройте «Версии» у этого мода и поставьте сборку ровно под вашу версию игры.',
+      'Если такой версии у мода нет — он с этой игрой не работает, его придётся убрать.',
+    ],
+    extract: (log) => {
+      const m = log.match(/from mod (\w[\w-]*)/i);
+      return m ? `мод ${m[1]}` : null;
+    },
+  },
+  {
     id: 'world',
     test: /Exception generating new chunk|ChunkLoadingException|Failed to save chunk|world\/level\.dat/i,
     title: 'Сбой при загрузке мира',
