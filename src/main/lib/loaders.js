@@ -54,12 +54,27 @@ async function listNeoForge(mc) {
   return all.slice().reverse().map((v) => ({ version: v, stable: !/beta/i.test(v) }));
 }
 
+/*
+ * OptiFine стоит особняком: это не загрузчик модов, а правка самой игры.
+ * Версия у него называется не номером, а изданием (HD_U_J9), поэтому
+ * в общий список отдаём имя файла — по нему установщик потом и работает.
+ */
+async function listOptiFine(mc) {
+  const builds = await require('./optifine').forVersion(mc);
+  return builds.map((b) => ({
+    version: b.file,
+    label: b.edition.replace(/_/g, ' ') + (b.preview ? ' (пробная)' : ''),
+    stable: !b.preview,
+  }));
+}
+
 async function list_(loader, mc) {
   try {
     if (loader === 'fabric') return await listFabric(mc);
     if (loader === 'quilt') return await listQuilt(mc);
     if (loader === 'forge') return await listForge(mc);
     if (loader === 'neoforge') return await listNeoForge(mc);
+    if (loader === 'optifine') return await listOptiFine(mc);
   } catch (e) {
     return [];
   }
@@ -206,6 +221,11 @@ async function install(loader, mc, loaderVersion, onProgress = () => {}) {
   if (!loader || loader === 'vanilla') {
     await versions.install(mc, onProgress);
     return mc;
+  }
+
+  // OptiFine ставит себя сам и сам же тянет базовую версию — ему в это не мешаем
+  if (loader === 'optifine') {
+    return require('./optifine').install(mc, loaderVersion, onProgress);
   }
 
   onProgress({ stage: 'Установка базовой версии Minecraft', percent: 2 });

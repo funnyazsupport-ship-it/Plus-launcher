@@ -643,8 +643,9 @@ async function loadLoaderVersions() {
   wrap.hidden = false;
   sel.innerHTML = '<option>загрузка…</option>';
   const list = await call(app.versions.loaders(loader, mc), true).catch(() => []);
+  // у OptiFine номера версии нет, там издание — его и показываем вместо имени файла
   sel.innerHTML = (list && list.length)
-    ? list.map((l) => `<option value="${l.version}">${l.version}${l.stable ? '' : ' (beta)'}</option>`).join('')
+    ? list.map((l) => `<option value="${l.version}">${l.label || l.version}${l.label || l.stable ? '' : ' (beta)'}</option>`).join('')
     : '<option value="">нет сборок для этой версии</option>';
 }
 
