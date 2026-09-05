@@ -100,9 +100,7 @@ async function check() {
    * по файлу описания — через electron-updater, иначе просто качаем установщик
    * из релиза и запускаем его. На сайт человека отправлять не за чем.
    */
-  const hasSetup = release.assets.some((a) => plat.installer.test(a.name));
-  const canAutoInstall = app.isPackaged
-    && (hasSetup || (Boolean(autoUpdater) && release.assets.some((a) => a.name === plat.feed)));
+  const canAutoInstall = app.isPackaged && Boolean(pickAsset(release.assets, plat));
 
   return {
     current: now,
@@ -153,12 +151,36 @@ function fetchTo(url, dest, onProgress) {
   });
 }
 
+/**
+ * Что из релиза брать.
+ * Установщик, если он лежит отдельно; иначе zip — внутрь мы умеем заглянуть.
+ * Rar намеренно не берём: распаковать его без сторонней библиотеки нельзя,
+ * и тащить её ради одного файла в лаунчер не стоит.
+ */
+function pickAsset(assets, plat) {
+  return assets.find((a) => plat.installer.test(a.name))
+    || assets.find((a) => /\.zip$/i.test(a.name))
+    || null;
+}
+
+/** Достаёт установщик из скачанного архива */
+function unpackSetup(archive, dir, plat) {
+  const AdmZip = require('adm-zip');
+  const zip = new AdmZip(archive);
+  const entry = zip.getEntries().find((e) => !e.isDirectory && plat.installer.test(e.entryName));
+  if (!entry) throw new Error('В архиве обновления нет установщика');
+
+  const out = path.join(dir, path.basename(entry.entryName));
+  fs.writeFileSync(out, entry.getData());
+  return out;
+}
+
 async function downloadSetup(onProgress = () => {}) {
   const repo = parseRepo(appConfig.updateRepo);
   const release = await latestRelease(repo);
   const plat = forPlatform();
-  const asset = release.assets.find((a) => plat.installer.test(a.name));
-  if (!asset) throw new Error('В релизе нет установщика для этой системы');
+  const asset = pickAsset(release.assets, plat);
+  if (!asset) throw new Error('В релизе нет ни установщика, ни архива с ним');
 
   const dir = path.join(app.getPath('temp'), 'plus-launcher-update');
   fs.mkdirSync(dir, { recursive: true });
@@ -173,8 +195,9 @@ async function downloadSetup(onProgress = () => {}) {
     throw new Error('Файл обновления скачался не полностью — попробуйте ещё раз');
   }
 
-  pendingSetup = file;
-  return { version: release.version, file };
+  onProgress({ percent: 100, transferred: asset.size, total: asset.size, stage: 'Распаковываю' });
+  pendingSetup = plat.installer.test(asset.name) ? file : unpackSetup(file, dir, plat);
+  return { version: release.version, file: pendingSetup };
 }
 
 /**
@@ -240,4 +263,7 @@ function install() {
   return true;
 }
 
-module.exports = { check, download, downloadSetup, install, parseRepo, cmpVersion, latestRelease };
+module.exports = {
+  check, download, downloadSetup, install,
+  parseRepo, cmpVersion, latestRelease, pickAsset, PLATFORM,
+};
