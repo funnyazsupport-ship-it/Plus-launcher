@@ -4,6 +4,7 @@ const fsp = require('fs/promises');
 const path = require('path');
 const net = require('net');
 const { spawn } = require('child_process');
+const AdmZip = require('adm-zip');
 
 const { dirs, gameDir } = require('./paths');
 const { getJSON, download } = require('./net');
@@ -280,9 +281,33 @@ function explain(tail) {
  */
 const CLIENT_ONLY = /^(oculus|iris|embeddium|rubidium|sodium|optifine|canvas|vulkanmod|nvidium|entityculling|immediatelyfast|betterfps)[-_.]/i;
 
+/*
+ * По имени узнаются не все.
+ *
+ * ReplayMod, например, называется reforgedplaymod и в списке выше быть не мог,
+ * а внутри у него лежит lwjgl-tinyexr — библиотека для картинки. Forge находит
+ * её среди вложенных зависимостей и падает на «Module org.lwjgl not found».
+ *
+ * LWJGL — это окно, графика и звук. На выделенном сервере ничего этого нет,
+ * поэтому мод, который её с собой несёт, там работать не может по определению.
+ */
+const GRAPHICS_LIB = /^(META-INF\/jars\/lwjgl-|org\/lwjgl\/)/i;
+
 const OFF = '.server-off';            // приписка, чтобы отличить от выключенных человеком
 
-/** Прячет клиентские моды на время работы сервера. Возвращает, сколько убрал. */
+/** Несёт ли мод внутри себя графическую библиотеку */
+function bundlesGraphics(file) {
+  try {
+    return new AdmZip(file).getEntries().some((e) => GRAPHICS_LIB.test(e.entryName));
+  } catch {
+    return false;                     // не открылся — не наше дело, сервер сам пожалуется
+  }
+}
+
+/**
+ * Прячет клиентские моды на время работы сервера.
+ * @returns {Array<{file: string, why: string}>} что именно убрано и почему
+ */
 function hideClientMods(dir) {
   const mods = path.join(dir, 'mods');
   let files;
@@ -290,10 +315,16 @@ function hideClientMods(dir) {
 
   const hidden = [];
   for (const f of files) {
-    if (!/\.jar$/i.test(f) || !CLIENT_ONLY.test(f)) continue;
+    if (!/\.jar$/i.test(f)) continue;
+
+    // сначала имя — это дёшево; внутрь лезем, только если имя ничего не сказало
+    let why = CLIENT_ONLY.test(f) ? 'мод для картинки' : '';
+    if (!why && bundlesGraphics(path.join(mods, f))) why = 'внутри графическая библиотека';
+    if (!why) continue;
+
     try {
       fs.renameSync(path.join(mods, f), path.join(mods, f + OFF));
-      hidden.push(f);
+      hidden.push({ file: f, why });
     } catch { /* занят игрой — оставим как есть, сервер сам пожалуется */ }
   }
   return hidden;
@@ -362,7 +393,8 @@ async function start(inst, world, opt = {}, onEvent = () => {}) {
 
   const hidden = hideClientMods(dir);
   if (hidden.length) {
-    onEvent('log', `[launcher] на время сервера убраны клиентские моды: ${hidden.join(', ')}`);
+    const list = hidden.map((h) => `${h.file} (${h.why})`).join(', ');
+    onEvent('log', `[launcher] на время сервера убраны клиентские моды: ${list}`);
   }
 
   onEvent('progress', { stage: 'Запуск сервера', percent: 80 });

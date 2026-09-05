@@ -237,7 +237,7 @@ $('#f-my-play').addEventListener('click', async () => {
   const note = $('#f-share-note');
   note.hidden = true;
   try {
-    await call(app.server.play({}), note);
+    await call(app.server.play({ instanceId: $('#f-instance').value }), note);
     say(note, T('Запускаем игру…'));
   } catch { /* подпись уже показана */ }
 });
@@ -251,17 +251,38 @@ function paintTunnel(st) {
 
 let lastTunnel = null;
 
-/** Миры выбранной сборки — из них человек выбирает, какой открыть */
-async function loadWorlds() {
+/**
+ * Сборки и их миры.
+ *
+ * Сборку выбирает человек, а не лаунчер «по последней запущенной»: она меняется
+ * при каждом запуске игры, и мир из списка потом искался бы не там.
+ */
+async function loadWorlds(instanceId = null) {
+  const inst = $('#f-instance');
   const sel = $('#f-world');
-  const r = await app.server.worlds().catch(() => null);
-  sel.innerHTML = '';
+
+  const r = await app.server.worlds(instanceId).catch(() => null);
   if (!r?.ok) {
+    inst.innerHTML = `<option value="">${T('нет сборок')}</option>`;
     sel.innerHTML = `<option value="">${T('нет сборок')}</option>`;
     return;
   }
+
+  // список сборок заполняем один раз, дальше только миры
+  if (inst.options.length !== r.data.instances.length) {
+    inst.innerHTML = '';
+    for (const i of r.data.instances) {
+      const o = document.createElement('option');
+      o.value = i.id;
+      o.textContent = `${i.name} · ${i.mc}${i.loader === 'vanilla' ? '' : ` ${i.loader}`}`;
+      inst.appendChild(o);
+    }
+  }
+  inst.value = r.data.instance.id;
+
+  sel.innerHTML = '';
   if (!r.data.worlds.length) {
-    sel.innerHTML = `<option value="">${T('в сборке нет миров')}</option>`;
+    sel.innerHTML = `<option value="">${T('в этой сборке нет миров')}</option>`;
     return;
   }
   for (const w of r.data.worlds) {
@@ -271,6 +292,8 @@ async function loadWorlds() {
     sel.appendChild(o);
   }
 }
+
+$('#f-instance').addEventListener('change', (e) => loadWorlds(e.target.value));
 
 $('#f-eula-link').addEventListener('click', () => app.shell.open('https://www.minecraft.net/eula'));
 
@@ -284,7 +307,8 @@ $('#f-tunnel-on').addEventListener('click', async () => {
   const note = $('#f-share-note');
   note.hidden = true;
   const world = $('#f-world').value;
-  if (!world) return say(note, T('Сначала создайте мир в игре'), 'err');
+  const instanceId = $('#f-instance').value;
+  if (!world) return say(note, T('В этой сборке нет миров — создайте мир в игре'), 'err');
   if (!$('#f-eula').checked) return say(note, T('Нужно принять правила Minecraft'), 'err');
 
   serverOn = true;
@@ -295,7 +319,7 @@ $('#f-tunnel-on').addEventListener('click', async () => {
   task = `t${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
   say(note, T('Готовлю сервер…'), '');
   try {
-    await call(app.server.start({ taskId: task, world, eula: true }), note);
+    await call(app.server.start({ taskId: task, instanceId, world, eula: true }), note);
   } catch {
     serverOn = false;
     paintStatus(lastTunnel);

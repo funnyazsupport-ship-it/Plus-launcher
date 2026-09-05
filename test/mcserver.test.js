@@ -253,13 +253,42 @@ describe('клиентские моды на время сервера', () => {
   const put = (d, ...names) => names.forEach((n) => fs.writeFileSync(path.join(d, n), 'не настоящий'));
   const list = (d) => fs.readdirSync(d).sort();
 
+  const names = (hidden) => hidden.map((h) => h.file).sort();
+
   test('шейдеры и ускорители картинки убираются, остальное остаётся', () => {
     const d = modsDir();
     put(d, 'oculus-1.6.9.jar', 'embeddium-0.3.jar', 'jei-15.2.jar', 'create-0.5.1.jar');
 
-    const hidden = mcserver.hideClientMods(gameDir('f1'));
-    assert.deepEqual(hidden.sort(), ['embeddium-0.3.jar', 'oculus-1.6.9.jar']);
+    assert.deepEqual(names(mcserver.hideClientMods(gameDir('f1'))), ['embeddium-0.3.jar', 'oculus-1.6.9.jar']);
     assert.deepEqual(list(d), ['create-0.5.1.jar', 'embeddium-0.3.jar.server-off', 'jei-15.2.jar', 'oculus-1.6.9.jar.server-off']);
+  });
+
+  test('мод с графической библиотекой внутри ловится, хотя имя ни о чём не говорит', () => {
+    /*
+     * Так выглядит ReplayMod: называется reforgedplaymod, ни в один список имён
+     * не попадает, а внутри несёт lwjgl-tinyexr. Forge находит её среди вложенных
+     * зависимостей и падает на «Module org.lwjgl not found».
+     */
+    const d = modsDir();
+    const AdmZip = require('adm-zip');
+
+    const withLwjgl = new AdmZip();
+    withLwjgl.addFile('META-INF/jars/lwjgl-tinyexr-3.3.1.jar', Buffer.from('не настоящий'));
+    withLwjgl.addFile('mod.class', Buffer.from('x'));
+    withLwjgl.writeZip(path.join(d, 'reforgedplaymod-1.20.1-0.3.1.jar'));
+
+    const plain = new AdmZip();
+    plain.addFile('META-INF/jars/curios-api.jar', Buffer.from('не настоящий'));
+    plain.writeZip(path.join(d, 'curios-forge-5.14.1.jar'));
+
+    assert.deepEqual(names(mcserver.hideClientMods(gameDir('f1'))), ['reforgedplaymod-1.20.1-0.3.1.jar']);
+    assert.equal(mcserver.hideClientMods(gameDir('f1')).length, 0, 'второй раз убирать уже нечего');
+  });
+
+  test('причина убирания называется — иначе непонятно, что произошло', () => {
+    const d = modsDir();
+    put(d, 'sodium-0.5.jar');
+    assert.match(mcserver.hideClientMods(gameDir('f1'))[0].why, /картинки/);
   });
 
   test('после остановки всё возвращается на место', () => {

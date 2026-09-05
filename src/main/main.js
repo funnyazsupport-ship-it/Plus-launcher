@@ -1184,11 +1184,26 @@ async function explainServerFail(inst, payload) {
 }
 
 handle('server:state', () => mcserver.state());
+/*
+ * Миры и список сборок вместе.
+ *
+ * Раньше окно спрашивало миры «последней выбранной сборки», а она меняется
+ * при каждом запуске игры. Человек открывал окно, поиграл, вернулся — и мир
+ * из списка уже искался в другой сборке, откуда «мир не найден». Теперь
+ * сборка выбирается явно и её же номер уходит обратно при запуске.
+ */
 handle('server:worlds', async (instanceId) => {
   const cfg = config.load();
-  const inst = cfg.instances.find((i) => i.id === (instanceId || cfg.lastInstance)) || cfg.instances[0];
-  if (!inst) throw new Error('Сначала создайте сборку');
-  return { instance: { id: inst.id, name: inst.name, mc: inst.mc, loader: inst.loader || 'vanilla' }, worlds: await mcserver.worlds(inst) };
+  if (!cfg.instances.length) throw new Error('Сначала создайте сборку');
+  const inst = cfg.instances.find((i) => i.id === instanceId)
+    || cfg.instances.find((i) => i.id === cfg.lastInstance)
+    || cfg.instances[0];
+
+  return {
+    instance: { id: inst.id, name: inst.name, mc: inst.mc, loader: inst.loader || 'vanilla' },
+    instances: cfg.instances.map((i) => ({ id: i.id, name: i.name, mc: i.mc, loader: i.loader || 'vanilla' })),
+    worlds: await mcserver.worlds(inst),
+  };
 });
 
 /** Хозяин заходит в собственный мир — на свой же сервер, но без сети */
