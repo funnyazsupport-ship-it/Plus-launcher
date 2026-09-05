@@ -1,5 +1,9 @@
 'use strict';
 const { app } = require('electron');
+const fs = require('fs');
+const path = require('path');
+const https = require('https');
+const { spawn } = require('child_process');
 const config = require('./config');
 const appConfig = require('./app-config');
 const { getJSON } = require('./net');
@@ -91,9 +95,14 @@ async function check() {
   const now = current();
   const hasUpdate = cmpVersion(release.version, now) > 0;
   const plat = forPlatform();
-  // автоустановка возможна, только если в релизе есть файл описания для этой системы
-  const canAutoInstall = Boolean(autoUpdater) && app.isPackaged
-    && release.assets.some((a) => a.name === plat.feed);
+  /*
+   * Ставить умеем двумя путями, и годится любой:
+   * по файлу описания — через electron-updater, иначе просто качаем установщик
+   * из релиза и запускаем его. На сайт человека отправлять не за чем.
+   */
+  const hasSetup = release.assets.some((a) => plat.installer.test(a.name));
+  const canAutoInstall = app.isPackaged
+    && (hasSetup || (Boolean(autoUpdater) && release.assets.some((a) => a.name === plat.feed)));
 
   return {
     current: now,
@@ -109,13 +118,73 @@ async function check() {
   };
 }
 
+/*
+ * Запасной путь: качаем установщик сами.
+ *
+ * electron-updater умеет ставить обновление только по файлу описания
+ * (latest.yml). Его в релизе может не оказаться — например, если туда положили
+ * один архив. Тогда лаунчер всё равно не должен отправлять человека на сайт:
+ * установщик лежит там же в релизе, его можно забрать и запустить.
+ */
+let pendingSetup = null;               // скачанный установщик, ждёт запуска
+
+function fetchTo(url, dest, onProgress) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'user-agent': 'PlusLauncher' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return resolve(fetchTo(new URL(res.headers.location, url).href, dest, onProgress));
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`Не удалось скачать обновление: ответ ${res.statusCode}`));
+      }
+      const total = Number(res.headers['content-length']) || 0;
+      let got = 0;
+      const out = fs.createWriteStream(dest);
+      res.on('data', (c) => {
+        got += c.length;
+        onProgress({ percent: total ? Math.round((got / total) * 100) : 0, transferred: got, total });
+      });
+      res.pipe(out);
+      out.on('finish', () => out.close(() => resolve(dest)));
+      out.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+async function downloadSetup(onProgress = () => {}) {
+  const repo = parseRepo(appConfig.updateRepo);
+  const release = await latestRelease(repo);
+  const plat = forPlatform();
+  const asset = release.assets.find((a) => plat.installer.test(a.name));
+  if (!asset) throw new Error('В релизе нет установщика для этой системы');
+
+  const dir = path.join(app.getPath('temp'), 'plus-launcher-update');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, asset.name);
+
+  // уже скачан целиком — второй раз не тянем
+  if (!fs.existsSync(file) || fs.statSync(file).size !== asset.size) {
+    onProgress({ percent: 0, transferred: 0, total: asset.size });
+    await fetchTo(asset.url, file, onProgress);
+  }
+  if (fs.statSync(file).size !== asset.size) {
+    throw new Error('Файл обновления скачался не полностью — попробуйте ещё раз');
+  }
+
+  pendingSetup = file;
+  return { version: release.version, file };
+}
+
 /**
  * Скачивает обновление через electron-updater.
  * @param onProgress ({percent, transferred, total})
  */
 async function download(onProgress = () => {}) {
-  if (!autoUpdater) throw new Error('electron-updater недоступен');
   if (!app.isPackaged) throw new Error('Автообновление работает только в собранном лаунчере');
+  // без файла описания electron-updater бессилен — качаем установщик сами
+  if (!autoUpdater || !(await hasFeed())) return downloadSetup(onProgress);
   const repo = parseRepo(appConfig.updateRepo);
   if (!repo) throw new Error('В сборке не указан репозиторий обновлений');
 
@@ -147,11 +216,28 @@ async function download(onProgress = () => {}) {
   });
 }
 
+/** Есть ли в релизе файл описания, по которому работает electron-updater */
+async function hasFeed() {
+  try {
+    const release = await latestRelease(parseRepo(appConfig.updateRepo));
+    return release.assets.some((a) => a.name === forPlatform().feed);
+  } catch {
+    return false;
+  }
+}
+
 /** Закрывает лаунчер и ставит скачанное обновление */
 function install() {
+  // установщик скачали сами — запускаем его и уходим с дороги
+  if (pendingSetup) {
+    const child = spawn(pendingSetup, [], { detached: true, stdio: 'ignore' });
+    child.unref();
+    setImmediate(() => app.quit());
+    return true;
+  }
   if (!autoUpdater) throw new Error('electron-updater недоступен');
   setImmediate(() => autoUpdater.quitAndInstall(false, true));
   return true;
 }
 
-module.exports = { check, download, install, parseRepo, cmpVersion, latestRelease };
+module.exports = { check, download, downloadSetup, install, parseRepo, cmpVersion, latestRelease };
