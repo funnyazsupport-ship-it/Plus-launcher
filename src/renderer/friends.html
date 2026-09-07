@@ -103,6 +103,21 @@
     </div>
     <div id="f-list"></div>
   </div>
+
+  <div class="panel">
+    <div class="side-head">
+      <span class="lbl">Мои серверы</span>
+      <span class="count mono" id="s-count">0</span>
+    </div>
+    <p class="dim">Обычные сервера, не про друзей. Добавленный тут сервер появится в игре во всех сборках сразу — и останется, даже если сборку пересоздать.</p>
+    <div class="form-row">
+      <label class="f grow"><span class="lbl">Название</span><input id="s-name" placeholder="Мой сервер" maxlength="40" /></label>
+      <label class="f grow"><span class="lbl">Адрес</span><input id="s-addr" class="mono" placeholder="play.example.com" maxlength="120" /></label>
+      <button class="btn accent" id="s-add"><svg><use href="#i-plus"/></svg>Добавить</button>
+    </div>
+    <p class="note" id="s-note" hidden></p>
+    <div id="s-list"></div>
+  </div>
 </main>
 
 <script src="i18n.js"></script>

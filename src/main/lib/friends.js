@@ -88,6 +88,42 @@ function update(id, patch = {}) {
   return next;
 }
 
+// ---------------- свои серверы ----------------
+
+/*
+ * Кроме друзей человек играет и на обычных серверах. Раньше их приходилось
+ * вбивать в каждой сборке отдельно, а после переустановки — заново. Здесь они
+ * лежат в настройках лаунчера и раскладываются по сборкам тем же способом,
+ * что и друзья.
+ */
+
+const servers = () => (config.load().servers || []);
+
+function addServer({ name, address }) {
+  const title = clean(name);
+  const addr = validAddress(address);
+  if (!title) throw new Error('Введите название сервера');
+  if (!addr) throw new Error('Адрес выглядит неправильно — нужен вид play.example.com или play.example.com:25565');
+
+  const all = servers();
+  if (all.some((s) => s.address.toLowerCase() === addr.toLowerCase())) {
+    throw new Error('Такой сервер уже есть в списке');
+  }
+  const server = {
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+    name: title,
+    address: addr,
+    added: Date.now(),
+  };
+  config.save({ servers: [...all, server] });
+  return server;
+}
+
+function removeServer(id) {
+  config.save({ servers: servers().filter((s) => s.id !== id) });
+  return true;
+}
+
 // ---------------- список серверов внутри игры ----------------
 
 const serversFile = (inst) => path.join(gameDir(inst.folder || inst.mc || inst.id), FILE);
@@ -118,17 +154,19 @@ const isOurs = (item) => String(item?.name?.value || '').startsWith(MARK);
  * Чужие записи сохраняются как есть — переписываем только свои.
  * @returns {Promise<number>} сколько друзей записано
  */
-async function syncInstance(inst, friends = list()) {
+async function syncInstance(inst, friends = list(), mine = servers()) {
   const file = serversFile(inst);
   const root = readServers(file);
   const items = root.value.servers.value.items || [];
 
-  const theirs = items.filter((i) => !isOurs(i));
-  const ours = friends.map((f) => ({
-    name: { __type: nbt.TAG.STRING, value: entryName(f) },
-    ip: { __type: nbt.TAG.STRING, value: f.address },
+  const entry = (e) => ({
+    name: { __type: nbt.TAG.STRING, value: entryName(e) },
+    ip: { __type: nbt.TAG.STRING, value: e.address },
     hidden: { __type: nbt.TAG.BYTE, value: 0 },
-  }));
+  });
+
+  const theirs = items.filter((i) => !isOurs(i));
+  const ours = [...friends.map(entry), ...mine.map(entry)];
 
   root.value.servers.value.items = [...theirs, ...ours];
   await fsp.mkdir(path.dirname(file), { recursive: true });
@@ -139,10 +177,11 @@ async function syncInstance(inst, friends = list()) {
 /** Раскладывает список друзей по всем сборкам */
 async function syncAll() {
   const friends = list();
+  const mine = servers();
   const done = [];
   for (const inst of config.load().instances) {
     try {
-      await syncInstance(inst, friends);
+      await syncInstance(inst, friends, mine);
       done.push(inst.name);
     } catch (e) {
       // одна сборка не должна ронять остальные: папка могла быть занята игрой
@@ -157,5 +196,6 @@ const incomingAllowed = () => config.load().friendsIncoming !== false;
 
 module.exports = {
   list, add, remove, update, syncAll, syncInstance,
+  servers, addServer, removeServer,
   validAddress, incomingAllowed, MARK,
 };

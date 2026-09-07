@@ -291,6 +291,7 @@ function openInstanceConfig(inst) {
   paintIconPreview(inst.id);
   $('#inst-cfg').hidden = false;
   renderBackups(inst.id);
+  renderShots(inst.id);
 }
 
 /** Кружок с иконкой в настройках сборки: либо картинка, либо стандартный кубик */
@@ -327,7 +328,120 @@ $('#ic-icon-clear').addEventListener('click', async () => {
   renderInstances(); updateDock();
 });
 
-// ---------------- резервные копии миров ----------------
+// ---------------- миры, копии и скриншоты ----------------
+
+/**
+ * Строка мира: копия, переименование, папка, удаление.
+ * Переименование правится прямо в строке — ради одного поля незачем открывать окно.
+ */
+function worldRow(instanceId, w) {
+  const el = document.createElement('div');
+  el.className = 'side-item';
+  el.innerHTML = `<span class="nm"></span>
+    <button class="ico-btn b" title="Сделать копию">${icon('download')}</button>
+    <button class="ico-btn e" title="Переименовать">${icon('pen')}</button>
+    <button class="ico-btn f" title="Открыть папку">${icon('folder')}</button>
+    <button class="ico-btn d" title="Удалить мир">${icon('trash')}</button>`;
+
+  const nm = el.querySelector('.nm');
+  nm.textContent = `${w.name} · ${fmtSize(w.size)}`;
+  // папка отличается от названия, когда мир переименовали в самой игре
+  nm.title = w.folder === w.name ? w.name : `${w.name} (папка ${w.folder})`;
+
+  el.querySelector('.b').addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      const r = await call(app.backups.create({
+        taskId: newTask(), id: instanceId, world: w.folder, keep: state.cfg.backupKeep || 5,
+      }));
+      toast(`Копия готова: ${fmtSize(r.size)}`);
+      renderBackups(instanceId);
+    } catch { /* тост уже показан */ } finally { clearProgress(); }
+  });
+
+  el.querySelector('.f').addEventListener('click', () => app.worlds.folder(instanceId, w.folder));
+
+  el.querySelector('.e').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.className = 'nm-edit';
+    input.value = w.name;
+    input.maxLength = 60;
+    const done = async (save) => {
+      if (input.dataset.closed) return;          // blur после Enter не должен сработать дважды
+      input.dataset.closed = '1';
+      const name = input.value.trim();
+      if (!save || !name || name === w.name) { renderBackups(instanceId); return; }
+      try {
+        await call(app.worlds.rename({ id: instanceId, folder: w.folder, name }));
+        toast('Мир переименован');
+      } catch { /* тост уже показан */ }
+      renderBackups(instanceId);
+    };
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') done(true);
+      if (ev.key === 'Escape') done(false);
+    });
+    input.addEventListener('blur', () => done(true));
+    nm.replaceWith(input);
+    input.focus();
+    input.select();
+  });
+
+  el.querySelector('.d').addEventListener('click', async () => {
+    const ok = await ask({
+      title: 'Удалить мир?',
+      text: `Мир {${w.name}} будет удалён из сборки.\n\nПеред удалением лаунчер сам сделает копию — её видно в списке справа, оттуда мир можно вернуть.`,
+      actions: [
+        { label: 'Удалить', value: true, kind: 'danger' },
+        { label: 'Отмена', value: null },
+      ],
+    });
+    if (!ok) return;
+    try {
+      const r = await call(app.worlds.remove({ taskId: newTask(), id: instanceId, folder: w.folder }));
+      toast(`Мир удалён, копия осталась: ${r.backup}`);
+      renderBackups(instanceId);
+    } catch { /* тост уже показан */ } finally { clearProgress(); }
+  });
+
+  return el;
+}
+
+/** Снимки сборки: превью, открыть, удалить */
+async function renderShots(instanceId) {
+  const box = $('#ic-shots');
+  const count = $('#ic-shots-count');
+  box.innerHTML = '<span class="dim"><span class="spin"></span></span>';
+
+  const shots = await call(app.worlds.shots(instanceId), true).catch(() => []);
+  count.textContent = shots.length;
+  if (!shots.length) { box.innerHTML = '<span class="dim">снимков пока нет</span>'; return; }
+
+  box.innerHTML = '';
+  // показываем последние: тридцати превью хватает, а грузить сотни ни к чему
+  for (const s of shots.slice(0, 30)) {
+    const el = document.createElement('figure');
+    el.className = 'shot';
+    el.innerHTML = `<img alt="" /><button class="ico-btn d" title="Удалить">${icon('trash')}</button><figcaption></figcaption>`;
+    el.querySelector('figcaption').textContent = new Date(s.at).toLocaleString(i18n.getLang(), {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+    el.title = s.file;
+
+    el.querySelector('img').addEventListener('click', () => app.worlds.shotOpen(instanceId, s.file));
+    el.querySelector('.d').addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      await call(app.worlds.shotRemove(instanceId, s.file));
+      renderShots(instanceId);
+    });
+    box.appendChild(el);
+
+    // превью подгружаем по одному, чтобы список появился сразу
+    call(app.worlds.thumb(instanceId, s.file), true)
+      .then((url) => { if (url) el.querySelector('img').src = url; })
+      .catch(() => {});
+  }
+}
 
 /** Рисует оба списка: миры сборки и уже сделанные копии */
 async function renderBackups(instanceId) {
@@ -337,30 +451,12 @@ async function renderBackups(instanceId) {
   bBox.innerHTML = '';
 
   const [worlds, list] = await Promise.all([
-    call(app.backups.worlds(instanceId), true).catch(() => []),
+    call(app.worlds.list(instanceId), true).catch(() => []),
     call(app.backups.list(instanceId), true).catch(() => []),
   ]);
 
   wBox.innerHTML = worlds.length ? '' : '<span class="dim">миров пока нет</span>';
-  for (const w of worlds) {
-    const el = document.createElement('div');
-    el.className = 'side-item';
-    el.innerHTML = '<span></span><button class="ico-btn b" title="Сделать копию"></button>';
-    el.querySelector('span').textContent = `${w.name} · ${fmtSize(w.size)}`;
-    el.querySelector('span').title = w.name;
-    el.querySelector('.b').innerHTML = icon('download');
-    el.querySelector('.b').addEventListener('click', async (e) => {
-      e.currentTarget.disabled = true;
-      try {
-        const r = await call(app.backups.create({
-          taskId: newTask(), id: instanceId, world: w.name, keep: state.cfg.backupKeep || 5,
-        }));
-        toast(`Копия готова: ${fmtSize(r.size)}`);
-        renderBackups(instanceId);
-      } catch { /* тост уже показан */ } finally { clearProgress(); }
-    });
-    wBox.appendChild(el);
-  }
+  for (const w of worlds) wBox.appendChild(worldRow(instanceId, w));
 
   bBox.innerHTML = list.length ? '' : '<span class="dim">копий пока нет</span>';
   for (const b of list) {
@@ -403,6 +499,8 @@ async function renderBackups(instanceId) {
 }
 
 $('#ic-bk-folder').addEventListener('click', () => { if (editing) app.backups.folder(editing.id); });
+$('#ic-w-folder').addEventListener('click', () => { if (editing) app.worlds.folder(editing.id); });
+$('#ic-shots-folder').addEventListener('click', () => { if (editing) app.worlds.shotsFolder(editing.id); });
 
 // ---------------- игра с другом ----------------
 

@@ -40,7 +40,7 @@ function showMenu(nick) {
   $('#f-menu').hidden = !inside;
   $('#f-me').hidden = !inside;
   $('#f-me-nick').textContent = nick || '';
-  if (inside) render();
+  if (inside) { render(); renderServers(); }
 }
 
 async function enter(action, btn) {
@@ -211,6 +211,65 @@ $('#f-add').addEventListener('click', async () => {
 });
 
 $('#f-nick').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#f-add').click(); });
+
+// ---------------- свои серверы ----------------
+
+/*
+ * Обычные сервера. Не про друзей и не про туннель: адрес человек знает сам,
+ * лаунчер только раскладывает его по сборкам, чтобы не вбивать в каждой заново.
+ */
+async function renderServers() {
+  const list = await app.servers.list().then((r) => (r.ok ? r.data : [])).catch(() => []);
+  $('#s-count').textContent = String(list.length);
+
+  const box = $('#s-list');
+  box.innerHTML = '';
+  if (!list.length) {
+    box.innerHTML = `<div class="friends-empty">${T('Пока пусто. Добавьте адрес — он появится в игре сам.')}</div>`;
+    return;
+  }
+
+  for (const s of list) {
+    const el = document.createElement('div');
+    el.className = 'friend';
+    el.innerHTML = `
+      <div class="friend-mark">${icon('play')}</div>
+      <div class="friend-body">
+        <div class="friend-name"></div>
+        <div class="friend-addr mono"></div>
+      </div>
+      <div class="friend-acts">
+        <button class="del" title="${T('Убрать')}">${icon('trash')}</button>
+      </div>`;
+    el.querySelector('.friend-name').textContent = s.name;
+    el.querySelector('.friend-addr').textContent = s.address;
+    el.querySelector('.del').addEventListener('click', async () => {
+      if (!confirm(T(`Убрать сервер ${s.name}?`))) return;
+      await app.servers.remove(s.id).catch(() => {});
+      await renderServers();
+    });
+    box.appendChild(el);
+  }
+}
+
+$('#s-add').addEventListener('click', async () => {
+  const note = $('#s-note');
+  note.hidden = true;
+  const name = $('#s-name').value.trim();
+  const address = $('#s-addr').value.trim();
+  if (!name || !address) return;
+  try {
+    await call(app.servers.add({ name, address }), note);
+    $('#s-name').value = '';
+    $('#s-addr').value = '';
+    say(note, T(`${name} добавлен — сервер уже в списке внутри игры.`));
+    await renderServers();
+  } catch { /* подпись уже показана */ }
+});
+
+for (const id of ['#s-name', '#s-addr']) {
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#s-add').click(); });
+}
 
 // ---------------- свой мир ----------------
 

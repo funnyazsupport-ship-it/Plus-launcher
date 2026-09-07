@@ -156,6 +156,61 @@ describe('друзья в списке серверов игры', () => {
   });
 });
 
+describe('свои серверы', () => {
+  test('добавление и удаление', () => {
+    const s = friends.addServer({ name: 'Хайпиксель', address: 'mc.hypixel.net' });
+    assert.equal(friends.servers().length, 1);
+    friends.removeServer(s.id);
+    assert.equal(friends.servers().length, 0);
+  });
+
+  test('один и тот же адрес дважды не добавляется', () => {
+    friends.addServer({ name: 'Первый', address: 'mc.example.com' });
+    assert.throws(() => friends.addServer({ name: 'Второй', address: 'MC.example.com' }), /уже есть/);
+  });
+
+  test('пустое название и кривой адрес не принимаются', () => {
+    assert.throws(() => friends.addServer({ name: ' ', address: 'a.com' }), /Введите название/);
+    assert.throws(() => friends.addServer({ name: 'Свой', address: 'не адрес' }), /неправильно/);
+  });
+
+  test('свой сервер попадает в список внутри игры вместе с друзьями', async () => {
+    friends.add({ name: 'Ваня', address: 'vanya.playit.gg' });
+    friends.addServer({ name: 'Хайпиксель', address: 'mc.hypixel.net' });
+    await friends.syncInstance(INST);
+
+    const list = readList();
+    assert.equal(list.length, 2);
+    assert.ok(list.some((s) => s.ip === 'vanya.playit.gg'), 'друга нет');
+    assert.ok(list.some((s) => s.ip === 'mc.hypixel.net'), 'своего сервера нет');
+  });
+
+  /*
+   * Свой сервер помечен так же, как друзья: иначе при следующей записи
+   * лаунчер принял бы его за чужую строку и оставил бы после удаления.
+   */
+  test('удалённый сервер исчезает, добавленный в игре руками остаётся', async () => {
+    putOwnServers([['Вручную', 'manual.example.com']]);
+    const s = friends.addServer({ name: 'Хайпиксель', address: 'mc.hypixel.net' });
+    await friends.syncInstance(INST);
+    assert.equal(readList().length, 2);
+
+    friends.removeServer(s.id);
+    await friends.syncInstance(INST);
+
+    const list = readList();
+    assert.equal(list.length, 1);
+    assert.equal(list[0].ip, 'manual.example.com');
+  });
+
+  test('повторная запись не плодит дубликаты', async () => {
+    friends.addServer({ name: 'Хайпиксель', address: 'mc.hypixel.net' });
+    await friends.syncInstance(INST);
+    await friends.syncInstance(INST);
+    assert.equal(readList().length, 1);
+  });
+});
+
 describe('запрет входящих', () => {
   test('по умолчанию друзья пускаются', () => {
     assert.equal(friends.incomingAllowed(), true);

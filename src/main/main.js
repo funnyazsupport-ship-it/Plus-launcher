@@ -18,6 +18,7 @@ const modUpdates = require('./lib/mod-updates');
 const modpacks = require('./lib/modpacks');
 const packfile = require('./lib/packfile');
 const backups = require('./lib/backups');
+const worlds = require('./lib/worlds');
 const cleanup = require('./lib/cleanup');
 const stats = require('./lib/presence-stats');
 const skins = require('./lib/skins');
@@ -763,6 +764,17 @@ handle('backups:folder', (id) => {
   return shell.openPath(dir);
 });
 
+// ---------- миры и скриншоты ----------
+handle('worlds:list', (id) => worlds.list(id));
+handle('worlds:rename', ({ id, folder, name }) => worlds.rename(id, folder, name));
+handle('worlds:remove', ({ taskId, id, folder }) => worlds.remove(id, folder, progress(taskId)));
+handle('worlds:folder', (id, world) => worlds.folder(id, world));
+handle('worlds:shots', (id) => worlds.screenshots(id));
+handle('worlds:thumb', (id, file) => worlds.thumb(id, file));
+handle('worlds:shotOpen', (id, file) => worlds.openShot(id, file));
+handle('worlds:shotRemove', (id, file) => worlds.removeShot(id, file));
+handle('worlds:shotsFolder', (id) => worlds.shotsFolder(id));
+
 handle('instances:folder', (id) => {
   const inst = config.load().instances.find((i) => i.id === id);
   if (!inst) return null;
@@ -1039,6 +1051,11 @@ handle('friends:installPack', async ({ taskId, id }) => {
 handle('friends:remove', async (id) => { friendsLib.remove(id); await friendsLib.syncAll(); return true; });
 handle('friends:update', async (id, patch) => { const f = friendsLib.update(id, patch); await friendsLib.syncAll(); return f; });
 handle('friends:sync', () => friendsLib.syncAll());
+
+// свои серверы: тот же список внутри игры, только записи не про друзей
+handle('servers:list', () => friendsLib.servers());
+handle('servers:add', async (data) => { const s = friendsLib.addServer(data); await friendsLib.syncAll(); return s; });
+handle('servers:remove', async (id) => { friendsLib.removeServer(id); await friendsLib.syncAll(); return true; });
 
 // окно друзей — отдельное, как и помощник
 let friendsWin = null;

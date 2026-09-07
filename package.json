@@ -16,6 +16,9 @@
     "publish": "electron-builder --win -p always",
     "check-ms": "node scripts/check-ms-auth.js"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "author": "Plus",
   "license": "MIT",
   "devDependencies": {

@@ -29,9 +29,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Не ниже 22: раньше `node --test` не раскрывал «test/*.test.js» сам,
+      # и на всех трёх системах тесты просто не находились
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Установка зависимостей

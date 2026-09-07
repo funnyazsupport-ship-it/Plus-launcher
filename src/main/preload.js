@@ -109,6 +109,17 @@ contextBridge.exposeInMainWorld('api', {
     remove: (id, file) => invoke('backups:remove', id, file),
     folder: (id) => invoke('backups:folder', id),
   },
+  worlds: {
+    list: (id) => invoke('worlds:list', id),
+    rename: (opts) => invoke('worlds:rename', opts),
+    remove: (opts) => invoke('worlds:remove', opts),
+    folder: (id, world) => invoke('worlds:folder', id, world),
+    shots: (id) => invoke('worlds:shots', id),
+    thumb: (id, file) => invoke('worlds:thumb', id, file),
+    shotOpen: (id, file) => invoke('worlds:shotOpen', id, file),
+    shotRemove: (id, file) => invoke('worlds:shotRemove', id, file),
+    shotsFolder: (id) => invoke('worlds:shotsFolder', id),
+  },
   skins: {
     list: () => invoke('skins:list'),
     add: () => invoke('skins:add'),
@@ -150,6 +161,11 @@ contextBridge.exposeInMainWorld('api', {
     status: () => invoke('friends:status'),
     play: (data) => invoke('friends:play', data),
     installPack: (data) => invoke('friends:installPack', data),
+  },
+  servers: {
+    list: () => invoke('servers:list'),
+    add: (data) => invoke('servers:add', data),
+    remove: (id) => invoke('servers:remove', id),
   },
   tunnel: {
     state: () => invoke('tunnel:state'),
