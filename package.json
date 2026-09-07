@@ -2,6 +2,7 @@
   "name": "plus-launcher",
   "version": "1.25.0",
   "description": "Plus Launcher - Minecraft launcher with Microsoft login, all versions, Fabric/Quilt/Forge/NeoForge and built-in Modrinth + CurseForge mod browser",
+  "homepage": "https://github.com/funnyazsupport-ship-it/Plus-launcher",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
@@ -177,7 +178,8 @@
         "xdg-utils",
         "libatspi2.0-0",
         "libuuid1",
-        "libsecret-1-0"
+        "libsecret-1-0",
+        "libasound2t64 | libasound2"
       ]
     },
     "rpm": {
@@ -189,7 +191,8 @@
         "libXtst",
         "xdg-utils",
         "at-spi2-core",
-        "libsecret"
+        "libsecret",
+        "alsa-lib"
       ]
     }
   }
