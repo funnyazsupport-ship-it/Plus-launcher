@@ -50,6 +50,7 @@ jobs:
         env:
           CURSEFORGE_KEY: ${{ secrets.CURSEFORGE_KEY }}
           DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
+          RELAY_KEY: ${{ secrets.RELAY_KEY }}
         run: node scripts/make-embedded-key.js
 
       - name: Сборка
@@ -69,6 +70,8 @@ jobs:
             dist/*.blockmap
             dist/*.AppImage
             dist/*.deb
+            dist/*.rpm
+            dist/*.pacman
             dist/*.tar.gz
             dist/*.dmg
             dist/*.zip
