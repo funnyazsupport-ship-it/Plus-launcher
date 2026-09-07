@@ -33,10 +33,27 @@ afterEach(() => {
   }
 });
 
-const freePort = () => new Promise((r) => {
-  const s = net.createServer();
-  s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); });
-});
+/*
+ * Свободный порт под будущий сервер.
+ *
+ * Просить порт у ядра (listen(0)) здесь нельзя: оно выдаёт его из того же
+ * промежутка, откуда берутся порты исходящих соединений, и между закрытием
+ * пробного сокета и настоящим прослушиванием система успевает отдать этот же
+ * номер чужому соединению. На macOS так падали два теста подряд.
+ * Поэтому пробуем номера из промежутка, который система сама не раздаёт.
+ */
+const freePort = async () => {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const port = 20000 + Math.floor(Math.random() * 10000);
+    const free = await new Promise((r) => {
+      const s = net.createServer();
+      s.once('error', () => r(false));
+      s.listen(port, '127.0.0.1', () => s.close(() => r(true)));
+    });
+    if (free) return port;
+  }
+  throw new Error('не нашлось свободного порта для теста');
+};
 
 /** «Игра»: отвечает на всё, что пришло, тем же с приставкой */
 function fakeGame() {
@@ -63,11 +80,22 @@ function talk(port, text, wait = 5000) {
 
 /** Поднимает релей на свободных портах */
 async function startRelay({ key = '', slots = 1 } = {}) {
-  const port = await freePort();
-  const pub = await freePort();
-  const r = relay.start({ port, key, from: pub, to: pub + slots - 1, data: dataFile });
-  running.push(r);
-  return { host: '127.0.0.1', port, key, pub };
+  // порт мог занять кто-то между проверкой и запуском — пробуем другой
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const port = await freePort();
+    const pub = await freePort();
+    try {
+      const r = await new Promise((resolve, reject) => {
+        const started = relay.start({ port, key, from: pub, to: pub + slots - 1, data: dataFile, onError: reject });
+        started.server.once('listening', () => resolve(started));
+      });
+      running.push(r);
+      return { host: '127.0.0.1', port, key, pub };
+    } catch (e) {
+      if (e.code !== 'EADDRINUSE') throw e;
+    }
+  }
+  throw new Error('релей не поднялся: все выбранные порты заняты');
 }
 
 /** Поднимает трубу и ждёт, пока она встанет или откажет */

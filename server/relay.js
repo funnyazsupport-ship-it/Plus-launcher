@@ -122,7 +122,8 @@ function openAccounts(file) {
  * Поднимает релей.
  * @param {object} opts port — управляющий порт, key — пароль сервера
  *   (пусто = заводить учётки может кто угодно), from/to — промежуток портов,
- *   data — файл с учётками
+ *   data — файл с учётками, onError — куда отдать отказ прослушивания
+ *   (без него запуск службой просто завершается с понятной строкой в журнале)
  */
 function start(opts = {}) {
   const controlPort = Number(opts.port) || Number(process.env.RELAY_PORT) || 7000;
@@ -388,12 +389,26 @@ function start(opts = {}) {
     });
   });
 
+  /*
+   * Без этого обработчика занятый порт валит весь процесс необъяснимым
+   * стеком: при перезапуске службы старый сокет ещё держится секунду-другую,
+   * и релей просто не поднимался, унося с собой всех, кто был в мире.
+   */
+  server.on('error', (e) => {
+    log(e.code === 'EADDRINUSE'
+      ? `порт ${controlPort} занят — похоже, релей уже запущен`
+      : `сеть отказала: ${e.message}`);
+    if (typeof opts.onError === 'function') opts.onError(e);
+    else if (require.main === module) process.exit(1);
+  });
+
   server.listen(controlPort, '0.0.0.0', () => {
     log(`релей слушает ${controlPort}, порты для миров ${from}–${to}, учёток ${Object.keys(accounts).length}`);
   });
 
   return {
     port: controlPort,
+    server,
     accounts,
     close() {
       for (const host of [...hosts.values()]) dropHost(host);
