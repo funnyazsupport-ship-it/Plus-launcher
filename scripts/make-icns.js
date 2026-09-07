@@ -13,8 +13,16 @@ const fs = require('fs');
 const path = require('path');
 const { app, nativeImage } = require('electron');
 
-const SRC = path.join(__dirname, '..', 'build', 'icon.png');
-const OUT = path.join(__dirname, '..', 'build', 'icon.icns');
+const BUILD = path.join(__dirname, '..', 'build');
+const SRC = path.join(BUILD, 'icon.png');
+
+/*
+ * Иконок две, и они нарочно с разными именами.
+ * Под macOS и приложение, и файлы .plusmodpack кладут свою иконку в одну папку
+ * внутри .app под своим же именем: одинаковые имена столкнулись бы, и сборка
+ * упала бы на «file already exists». Картинка при этом одна и та же.
+ */
+const OUTS = [path.join(BUILD, 'icon.icns'), path.join(BUILD, 'modpack.icns')];
 
 /*
  * Гнёзда icns. Каждое — свой размер, внутри обычный PNG.
@@ -44,9 +52,18 @@ function build() {
   const head = Buffer.alloc(8);
   head.write('icns', 0, 'ascii');
   head.writeUInt32BE(body.length + 8, 4);
+  const icns = Buffer.concat([head, body]);
 
-  fs.writeFileSync(OUT, Buffer.concat([head, body]));
-  console.log(`[icns] ${path.relative(process.cwd(), OUT)} — ${SLOTS.length} размеров, ${body.length + 8} байт`);
+  for (const out of OUTS) {
+    fs.writeFileSync(out, icns);
+    console.log(`[icns] ${path.relative(process.cwd(), out)} — ${SLOTS.length} размеров, ${icns.length} байт`);
+  }
+
+  // тем же именем иконка нужна и остальным системам: electron-builder ищет
+  // modpack.ico под Windows и modpack.png под Linux
+  fs.copyFileSync(path.join(BUILD, 'icon.ico'), path.join(BUILD, 'modpack.ico'));
+  fs.copyFileSync(SRC, path.join(BUILD, 'modpack.png'));
+  console.log('[icns] modpack.ico и modpack.png обновлены');
 }
 
 app.whenReady().then(() => {

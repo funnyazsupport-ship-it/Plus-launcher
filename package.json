@@ -1,6 +1,6 @@
 {
   "name": "plus-launcher",
-  "version": "1.24.2",
+  "version": "1.25.0",
   "description": "Plus Launcher - Minecraft launcher with Microsoft login, all versions, Fabric/Quilt/Forge/NeoForge and built-in Modrinth + CurseForge mod browser",
   "main": "src/main/main.js",
   "scripts": {
@@ -162,7 +162,7 @@
         "ext": "plusmodpack",
         "name": "Plus Launcher modpack",
         "description": "Сборка Plus Launcher",
-        "icon": "build/icon",
+        "icon": "build/modpack",
         "role": "Viewer",
         "mimeType": "application/x-plus-modpack"
       }
