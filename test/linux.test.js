@@ -1,6 +1,8 @@
 'use strict';
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
 
 const { useTempRoot, freshRequire } = require('./helpers');
 
@@ -119,6 +121,14 @@ describe('настройка сборки под Linux', () => {
 
   test('иконка ассоциации задана без расширения — каждой системе своя', () => {
     // .ico понимает только Windows; electron-builder сам возьмёт .png для Linux
-    assert.equal(build().fileAssociations[0].icon, 'build/icon');
+    const icon = build().fileAssociations[0].icon;
+    assert.ok(!path.extname(icon), `у ассоциации не должно быть расширения: ${icon}`);
+
+    // и она не должна называться так же, как иконка приложения: под macOS обе
+    // ложатся в одну папку внутри .app, и одинаковые имена столкнутся
+    assert.notEqual(path.basename(icon), path.basename(build().mac.icon, '.icns'));
+    for (const ext of ['.icns', '.ico', '.png']) {
+      assert.ok(fs.existsSync(path.join(__dirname, '..', `${icon}${ext}`)), `нет ${icon}${ext}`);
+    }
   });
 });
