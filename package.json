@@ -45,7 +45,8 @@
       {
         "provider": "github",
         "owner": "funnyazsupport-ship-it",
-        "repo": "Plus-launcher"
+        "repo": "Plus-launcher",
+        "releaseType": "release"
       }
     ],
     "win": {
