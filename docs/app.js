@@ -40,18 +40,74 @@ const fmtDate = (iso) => {
   } catch { return ''; }
 };
 
+/*
+ * Системы и что для каждой качать.
+ *
+ * main — файл под кнопку, alt — прочие сборки той же системы мелкой строкой.
+ * Под macOS их две: браузер не отличает Apple Silicon от Intel (Safari и Chrome
+ * на M-процессорах всё равно представляются как Intel), поэтому кнопка ведёт на
+ * arm64 — такие маки продаются с 2020 года, — а на Intel рядом стоит ссылка.
+ */
+const SYSTEMS = [
+  {
+    id: 'win',
+    label: 'Windows',
+    main: [/-Windows\.zip$/i, /Setup-[\d.]+\.zip$/i, /\.exe$/i],
+    alt: [{ title: 'установщик .exe без архива', match: /\.exe$/i }],
+  },
+  {
+    id: 'mac',
+    label: 'macOS',
+    main: [/-macOS\.zip$/i, /arm64\.dmg$/i, /\.dmg$/i],
+    alt: [
+      { title: 'Apple Silicon — .dmg', match: /arm64\.dmg$/i },
+      { title: 'Intel — .dmg', match: /x64\.dmg$/i },
+    ],
+  },
+  {
+    id: 'linux',
+    label: 'Linux',
+    main: [/-Linux\.zip$/i, /\.AppImage$/i, /\.tar\.gz$/i],
+    alt: [
+      { title: 'AppImage — без установки', match: /\.AppImage$/i },
+      { title: 'Ubuntu, Debian — .deb', match: /\.deb$/i },
+      { title: 'Fedora — .rpm', match: /\.rpm$/i },
+      { title: 'Arch — .pacman', match: /\.pacman$/i },
+    ],
+  },
+];
+
+const byId = (id) => SYSTEMS.find((s) => s.id === id) || SYSTEMS[0];
+
+/** Система гостя. Телефоны сюда не попадают: Android представляется как Linux */
+function detectSystem() {
+  const ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod/i.test(ua)) return 'win';
+  const p = navigator.userAgentData?.platform || navigator.platform || '';
+  if (/Mac/i.test(p) || /Mac OS X/i.test(ua)) return 'mac';
+  if (/Linux|X11|CrOS/i.test(p) || /Linux|X11|CrOS/i.test(ua)) return 'linux';
+  return 'win';
+}
+
+/** Первый файл релиза, подходящий под один из образцов; порядок задаёт предпочтение */
+const firstMatch = (assets, patterns) => {
+  for (const re of patterns) {
+    const hit = assets.find((a) => re.test(a.name));
+    if (hit) return hit;
+  }
+  return null;
+};
+
 /**
- * Что скачивает человек с последнего релиза.
+ * Что скачивает человек с последнего релиза для своей системы.
  * Установщик предпочтительнее, но релиз может состоять и из архива —
  * тогда шаги установки должны это учитывать, иначе люди не поймут,
  * почему у них вместо программы лежит непонятный файл.
  */
-function pickAsset(assets = []) {
-  const exe = assets.find((a) => /\.exe$/i.test(a.name));
-  if (exe) return { ...exe, kind: 'exe' };
-  const archive = assets.find((a) => /\.(rar|zip|7z)$/i.test(a.name));
-  if (archive) return { ...archive, kind: 'archive' };
-  return null;
+function pickAsset(assets = [], system = 'win') {
+  const hit = firstMatch(assets, byId(system).main);
+  if (!hit) return null;
+  return { ...hit, kind: /\.(zip|rar|7z|tar\.gz)$/i.test(hit.name) ? 'archive' : 'installer' };
 }
 
 const el = (tag, cls, html) => {
@@ -79,26 +135,35 @@ function renderSteps(steps) {
 
 const SMARTSCREEN = 'Windows покажет синее окно SmartScreen: «Подробнее» → «Выполнить в любом случае». '
   + 'Так бывает у любых программ без платной подписи разработчика.';
+const GATEKEEPER = 'Откройте скачанный <code class="mono">.dmg</code> и перетащите лаунчер в «Программы». '
+  + 'Первый раз запускайте правой кнопкой → «Открыть»: macOS предупредит о программе без подписи Apple, '
+  + 'в этом окне появится кнопка «Открыть». Дальше запускается как обычно.';
+const APPIMAGE = 'Файл <code class="mono">.AppImage</code> ставить не нужно — он уже готовая программа. '
+  + 'Разрешите ему запуск: правой кнопкой → «Свойства» → «Права» → «Разрешить выполнение файла», '
+  + 'либо в терминале <code class="mono">chmod +x</code> и запустите двойным щелчком.';
 const PICK_FOLDER = 'При первом запуске лаунчер спросит, где хранить файлы игры. '
   + 'Можно оставить папку по умолчанию или указать другой диск.';
 
-function stepsFor(asset) {
-  const name = asset ? `<code class="mono">${asset.name}</code>` : '<code class="mono">PlusLauncher-Setup-….exe</code>';
+const UNPACK = 'Правой кнопкой по архиву → «Извлечь всё». Если система не открывает файл сама, '
+  + 'поставьте 7-Zip или WinRAR — внутри лежит обычный установщик.';
+
+/** Как поставить скачанное — у каждой системы свой второй шаг */
+const RUN_STEP = {
+  win: { title: 'Запустите его', text: SMARTSCREEN },
+  mac: { title: 'Перетащите в «Программы»', text: GATEKEEPER },
+  linux: { title: 'Разрешите запуск', text: APPIMAGE },
+};
+
+function stepsFor(asset, system = 'win') {
+  const name = asset ? `<code class="mono">${asset.name}</code>` : 'файл свежей версии';
   const size = asset ? `, ${fmtSize(asset.size)}` : '';
+  const first = { title: 'Скачайте файл', text: `Кнопка выше скачивает ${name}${size} напрямую.` };
+  const last = { title: 'Выберите папку для игры', text: PICK_FOLDER };
 
   if (asset && asset.kind === 'archive') {
-    return [
-      { title: 'Скачайте архив', text: `Кнопка выше скачивает ${name}${size} напрямую.` },
-      { title: 'Распакуйте его', text: 'Правой кнопкой по архиву → «Извлечь всё». Если Windows не открывает файл сама, поставьте 7-Zip или WinRAR — внутри лежит обычный установщик <code class="mono">.exe</code>.' },
-      { title: 'Запустите установщик', text: SMARTSCREEN },
-      { title: 'Выберите папку для игры', text: PICK_FOLDER },
-    ];
+    return [first, { title: 'Распакуйте его', text: UNPACK }, RUN_STEP.win, last];
   }
-  return [
-    { title: 'Скачайте установщик', text: `Кнопка выше скачивает ${name}${size} напрямую.` },
-    { title: 'Запустите его', text: SMARTSCREEN },
-    { title: 'Выберите папку для игры', text: PICK_FOLDER },
-  ];
+  return [first, RUN_STEP[system] || RUN_STEP.win, last];
 }
 
 /**
@@ -126,29 +191,78 @@ async function localCopy(name) {
  * Ставит на кнопку прямую ссылку на файл свежего релиза, заполняет версию,
  * размер и дату, а шаги установки подгоняет под то, что реально скачается.
  */
+/** Вешает на ссылку прямую загрузку файла; своя копия рядом с сайтом важнее */
+async function linkTo(node, asset) {
+  node.href = (await localCopy(asset.name)) || asset.browser_download_url;
+  node.setAttribute('download', asset.name);
+  node.removeAttribute('target');
+}
+
+/** Кнопки для двух остальных систем — рядом с основной */
+async function fillOther(assets, mine) {
+  const nodes = [$('#download-alt-1'), $('#download-alt-2')];
+  const others = SYSTEMS.filter((s) => s.id !== mine);
+
+  for (const [i, sys] of others.entries()) {
+    const node = nodes[i];
+    if (!node) continue;
+    // подпись ставим всегда: гость с мака не должен видеть на кнопке «для Windows»
+    node.querySelector('span').textContent = `Скачать для ${sys.label}`;
+
+    // файла для этой системы в релизе нет — оставляем ссылку на страницу релизов
+    const asset = pickAsset(assets, sys.id);
+    if (asset) await linkTo(node, asset);
+  }
+}
+
+/** Прочие сборки своей системы: отдельные установщики, мак на Intel, deb и rpm */
+async function fillAlt(assets, mine, chosen) {
+  const box = $('#cta-alt');
+  if (!box) return;
+  box.innerHTML = '';
+
+  for (const variant of byId(mine).alt) {
+    const asset = assets.find((a) => variant.match.test(a.name));
+    // то же самое, что уже качает кнопка, второй строкой не повторяем
+    if (!asset || asset.name === chosen?.name) continue;
+    const link = el('a', null, variant.title);
+    await linkTo(link, asset);
+    box.appendChild(link);
+  }
+  box.hidden = !box.children.length;
+}
+
 async function loadRelease() {
   const meta = $('#release-meta');
   const button = $('#download');
+  const system = detectSystem();
+  const label = $('#download-label');
+
+  if (label) label.textContent = `Скачать для ${byId(system).label}`;
 
   // Свой файл ставим первым делом и не ждём GitHub: если его API молчит или
   // заблокирован у человека, кнопка всё равно должна качать файл с нашего домена.
-  const own = await localCopy(null);
+  // Он собран под Windows, поэтому гостям с мака и Linux не подходит.
+  const own = system === 'win' ? await localCopy(null) : null;
   if (own) {
     button.href = own;
     button.setAttribute('download', own.split('/').pop());
   }
 
   try {
-    const res = await fetch(API, { headers: { Accept: 'application/vnd.github+json' } });
+    // no-store: браузер охотно отдаёт старый ответ, и кнопка после смены файлов
+    // в релизе начинает вести на файл, которого там уже нет
+    const res = await fetch(API, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const rel = await res.json();
+    const assets = rel.assets || [];
 
-    const asset = pickAsset(rel.assets);
-    if (asset?.browser_download_url && !own) {
-      // своей копии нет — ведём прямо на файл релиза, страница GitHub не открывается
-      button.href = (await localCopy(asset.name)) || asset.browser_download_url;
-      button.setAttribute('download', asset.name);
-    }
+    const asset = pickAsset(assets, system);
+    // своей копии нет — ведём прямо на файл релиза, страница GitHub не открывается
+    if (asset?.browser_download_url && !own) await linkTo(button, asset);
+
+    await fillOther(assets, system);
+    await fillAlt(assets, system, asset);
 
     const version = String(rel.tag_name || '').replace(/^v/, '');
     const parts = [];
@@ -157,10 +271,12 @@ async function loadRelease() {
     if (rel.published_at) parts.push(fmtDate(rel.published_at));
     meta.innerHTML = parts.join(' · ') || 'все версии на GitHub';
 
-    renderSteps(stepsFor(asset));
+    renderSteps(stepsFor(asset, system));
   } catch {
-    // GitHub не ответил — кнопка остаётся на странице релизов, шаги берутся из разметки
+    // GitHub не ответил — кнопка остаётся на странице релизов, но шаги всё равно
+    // показываем под систему гостя: они не зависят от того, ответил ли API
     meta.textContent = 'все версии на GitHub';
+    renderSteps(stepsFor(null, system));
   }
 }
 

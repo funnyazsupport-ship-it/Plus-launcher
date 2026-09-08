@@ -58,6 +58,10 @@
   <symbol id="i-discord" viewBox="0 0 16 16"><path d="M6 3.2C4.6 3.4 3.4 3.9 2.6 4.5 1.6 6.4 1.1 8.6 1.3 11c1 .8 2 1.3 3 1.6l.7-1.1M10 3.2c1.4.2 2.6.7 3.4 1.3 1 1.9 1.5 4.1 1.3 6.5-1 .8-2 1.3-3 1.6l-.7-1.1" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="8.5" r="1.2" fill="currentColor"/><circle cx="10" cy="8.5" r="1.2" fill="currentColor"/></symbol>
   <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4M13 1.5V5h-3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-link" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13 3 7.5 8.5M11.5 9.5v4h-9v-9h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-users" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 13.5c.5-2.6 2.4-4 4.5-4s4 1.4 4.5 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M11 3.4a2.5 2.5 0 0 1 0 4.2M12.6 9.9c1 .7 1.7 1.9 1.9 3.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+  <symbol id="i-server" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="9" width="12" height="4.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4.6 4.75h.01M4.6 11.25h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.8 8h12.4M8 1.8c1.7 1.7 2.6 3.8 2.6 6.2S9.7 12.5 8 14.2C6.3 12.5 5.4 10.4 5.4 8S6.3 3.5 8 1.8Z" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 16 16"><path d="M10.4 1.8a3.6 3.6 0 0 0-3.9 5.4l-4.3 4.3a1.4 1.4 0 0 0 2 2l4.3-4.3a3.6 3.6 0 0 0 5.4-3.9l-2.1 2.1-2-.6-.6-2Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
   <symbol id="i-tg" viewBox="0 0 16 16"><path d="M14.5 2.3 1.9 7.2c-.6.2-.6.7 0 .9l3.2 1 1.2 3.7c.2.5.4.6.8.2l1.7-1.6 3.3 2.4c.5.3.9.1 1-.5l1.8-9.9c.1-.6-.3-.9-.8-.7Z" fill="currentColor"/><path d="m5.6 9.1 6.4-4.2-4.9 4.8-.2 2.3" fill="none" stroke="#0d0e11" stroke-width=".9" stroke-linejoin="round"/></symbol>
 </defs></svg>
 
@@ -78,24 +82,42 @@
 <main>
   <section class="hero">
     <div class="hero-text">
-      <p class="eyebrow mono">Лаунчер Minecraft для Windows</p>
+      <p class="eyebrow mono">Лаунчер Minecraft для Windows, macOS и Linux</p>
       <h1>Plus Launcher — все версии, моды и скины <span class="accent">в одном окне</span></h1>
       <p class="lead">
         От alpha 2010 года до свежих снапшотов. Fabric, Quilt, Forge и NeoForge ставятся в один клик,
         моды ищутся сразу на Modrinth и CurseForge, у каждой версии своя папка со своими модами и мирами.
       </p>
 
+      <!-- Первой стоит кнопка под систему гостя, остальные две рядом. Подписи и
+           ссылки проставляет app.js по файлам свежего релиза. -->
       <div class="cta">
-        <a class="btn primary" id="download" href="#" rel="noopener">
-          <svg><use href="#i-download"/></svg>
-          <span>Скачать для Windows</span>
-        </a>
+        <!-- Подписи и ссылки заменит app.js, когда ответит GitHub. До этого — и если
+             скрипт не загрузился — кнопки уже рабочие и ведут на страницу релизов:
+             пустых кнопок и ссылок в никуда быть не должно. -->
+        <div class="cta-buttons">
+          <a class="btn primary" id="download" href="https://github.com/funnyazsupport-ship-it/Plus-launcher/releases/latest" rel="noopener">
+            <svg><use href="#i-download"/></svg>
+            <span id="download-label">Скачать для Windows</span>
+          </a>
+          <a class="btn" id="download-alt-1" href="https://github.com/funnyazsupport-ship-it/Plus-launcher/releases/latest" rel="noopener">
+            <svg><use href="#i-download"/></svg>
+            <span>Скачать для macOS</span>
+          </a>
+          <a class="btn" id="download-alt-2" href="https://github.com/funnyazsupport-ship-it/Plus-launcher/releases/latest" rel="noopener">
+            <svg><use href="#i-download"/></svg>
+            <span>Скачать для Linux</span>
+          </a>
+        </div>
         <div class="cta-meta mono" id="release-meta">проверяю последнюю версию…</div>
         <div class="online" id="online" hidden><span class="dot"></span><b id="online-count">0</b><span id="online-label">сейчас играют</span></div>
       </div>
 
+      <!-- Другие сборки той же системы: мак на Intel, deb и rpm для Linux -->
+      <div class="cta-alt mono" id="cta-alt" hidden></div>
+
       <ul class="facts mono">
-        <li>Windows 10 / 11, 64-бит</li>
+        <li>Windows, macOS и Linux</li>
         <li>Java ставится сама</li>
         <li>Без рекламы и регистрации</li>
       </ul>
@@ -148,6 +170,41 @@
         <svg class="card-ico"><use href="#i-refresh"/></svg>
         <h3>Обновляется сам</h3>
         <p>Лаунчер проверяет новые версии и предлагает поставить обновление, не заходя на сайт.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-users"/></svg>
+        <h3>Игра с другом без Radmin</h3>
+        <p>Откройте мир для сети — друг увидит его прямо в списке серверов. Ни адресов, ни портов, ни сторонних программ.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-server"/></svg>
+        <h3>Свой сервер из лаунчера</h3>
+        <p>Сервер любой версии ставится и запускается кнопкой: Java и ядро скачаются сами. Можно добавить и чужой сервер по адресу.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-globe"/></svg>
+        <h3>Миры, скриншоты и копии</h3>
+        <p>Список миров с переименованием и удалением, просмотр скриншотов. Перед опасной правкой мир копируется — потерять сохранение сложнее.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-package"/></svg>
+        <h3>Модпаки целиком</h3>
+        <p>Сборки с Modrinth и CurseForge ставятся одним файлом: версия, загрузчик и все моды подтянутся сами.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-refresh"/></svg>
+        <h3>Моды не отстают</h3>
+        <p>Лаунчер узнаёт моды по содержимому файла — даже те, что положили руками, — и находит для них свежие версии.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-wrench"/></svg>
+        <h3>Разбирает вылеты</h3>
+        <p>Игра не запустилась — лаунчер читает лог и называет причину: не та Java, конфликт модов, нехватка памяти. Частые случаи узнаёт и без интернета.</p>
+      </article>
+      <article class="card">
+        <svg class="card-ico"><use href="#i-download"/></svg>
+        <h3>Качает через зеркала</h3>
+        <p>Когда серверы Mojang отвечают рывками, файлы берутся с зеркала. Каждый всё равно сверяется по контрольной сумме.</p>
       </article>
     </div>
   </section>
