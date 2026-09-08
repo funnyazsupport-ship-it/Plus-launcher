@@ -17,9 +17,9 @@ try { ({ autoUpdater } = require('electron-updater')); } catch { /* работа
  * Без нужного файла автоустановка невозможна — остаётся ссылка на страницу релиза.
  */
 const PLATFORM = {
-  win32: { feed: 'latest.yml', installer: /\.exe$/i, label: 'Windows' },
-  darwin: { feed: 'latest-mac.yml', installer: /\.(dmg|pkg)$/i, label: 'macOS' },
-  linux: { feed: 'latest-linux.yml', installer: /\.(AppImage|deb|rpm|tar\.gz)$/i, label: 'Linux' },
+  win32: { feed: 'latest.yml', installer: /\.exe$/i, tag: /win/i, label: 'Windows' },
+  darwin: { feed: 'latest-mac.yml', installer: /\.(dmg|pkg)$/i, tag: /mac|osx|darwin/i, label: 'macOS' },
+  linux: { feed: 'latest-linux.yml', installer: /\.(AppImage|deb|rpm|tar\.gz)$/i, tag: /linux/i, label: 'Linux' },
 };
 
 const forPlatform = () => PLATFORM[process.platform] || PLATFORM.linux;
@@ -151,6 +151,13 @@ function fetchTo(url, dest, onProgress) {
   });
 }
 
+/*
+ * Имя файла названо под нашу архитектуру? «arm64» и «x64» не путаются:
+ * в «arm64» подстроки «x64» нет. Linux-имена (amd64, x86_64) сюда не попадают,
+ * и это не беда — под Linux сборка всё равно одна.
+ */
+const forArch = (name) => new RegExp(`[-_.]${process.arch}[-_.]`, 'i').test(name);
+
 /**
  * Что из релиза брать.
  * Установщик, если он лежит отдельно; иначе zip — внутрь мы умеем заглянуть.
@@ -158,16 +165,28 @@ function fetchTo(url, dest, onProgress) {
  * и тащить её ради одного файла в лаунчер не стоит.
  */
 function pickAsset(assets, plat) {
-  return assets.find((a) => plat.installer.test(a.name))
-    || assets.find((a) => /\.zip$/i.test(a.name))
-    || null;
+  // под macOS установщиков два — на Apple Silicon и на Intel; берём свой
+  const direct = assets.filter((a) => plat.installer.test(a.name));
+  if (direct.length) return direct.find((a) => forArch(a.name)) || direct[0];
+
+  /*
+   * В релизе может лежать по архиву на каждую систему. Брать первый попавшийся
+   * нельзя: на Windows так скачивался архив с пакетами для Linux, и распаковка
+   * падала с «в архиве нет установщика». Берём тот, где в имени наша система,
+   * а безымянный архив — только если он в релизе один.
+   */
+  const zips = assets.filter((a) => /\.zip$/i.test(a.name));
+  return zips.find((a) => plat.tag.test(a.name))
+    || (zips.length === 1 ? zips[0] : null);
 }
 
 /** Достаёт установщик из скачанного архива */
 function unpackSetup(archive, dir, plat) {
   const AdmZip = require('adm-zip');
   const zip = new AdmZip(archive);
-  const entry = zip.getEntries().find((e) => !e.isDirectory && plat.installer.test(e.entryName));
+  const found = zip.getEntries().filter((e) => !e.isDirectory && plat.installer.test(e.entryName));
+  // под macOS в архиве лежат сборки под arm64 и x64 — нужна своя, а не первая
+  const entry = found.find((e) => forArch(e.entryName)) || found[0];
   if (!entry) throw new Error('В архиве обновления нет установщика');
 
   const out = path.join(dir, path.basename(entry.entryName));

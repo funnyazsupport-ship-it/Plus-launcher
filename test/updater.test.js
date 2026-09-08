@@ -37,6 +37,29 @@ describe('что брать из релиза', () => {
     assert.equal(up.pickAsset(a('README.md', 'latest.yml'), win), null);
   });
 
+  /*
+   * Когда в релизе лежит по архиву на каждую систему, первый по алфавиту —
+   * линуксовый. Раньше его и качали на Windows, а распаковка падала с
+   * «в архиве нет установщика».
+   */
+  test('из нескольких архивов берём свой, а не первый', () => {
+    const assets = a('App-1.0.0-Linux.zip', 'App-1.0.0-macOS.zip', 'App-1.0.0-Windows.zip');
+    assert.equal(up.pickAsset(assets, up.PLATFORM.win32).name, 'App-1.0.0-Windows.zip');
+    assert.equal(up.pickAsset(assets, up.PLATFORM.darwin).name, 'App-1.0.0-macOS.zip');
+    assert.equal(up.pickAsset(assets, up.PLATFORM.linux).name, 'App-1.0.0-Linux.zip');
+  });
+
+  test('чужой архив не берём — лучше ничего', () => {
+    assert.equal(up.pickAsset(a('App-1.0.0-Linux.zip', 'App-1.0.0-macOS.zip'), win), null);
+  });
+
+  // под macOS установщиков два: на Apple Silicon и на Intel
+  test('из двух установщиков macOS берём под свою архитектуру', () => {
+    const assets = a('App-1.0.0-arm64.dmg', 'App-1.0.0-x64.dmg');
+    const got = up.pickAsset(assets, up.PLATFORM.darwin);
+    assert.equal(got.name, `App-1.0.0-${process.arch}.dmg`);
+  });
+
   test('у каждой системы свой установщик', () => {
     const assets = a('app-1.0.0.exe', 'app-1.0.0.dmg', 'app-1.0.0.AppImage');
     assert.equal(up.pickAsset(assets, up.PLATFORM.win32).name, 'app-1.0.0.exe');
